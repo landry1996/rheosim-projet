@@ -34,5 +34,15 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent)
   },
+  {
+    path: 'visualization/:simulationId',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/visualization/results-viewer.component').then(m => m.ResultsViewerComponent)
+  },
+  {
+    path: 'organizations',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/collaboration/organization.component').then(m => m.OrganizationComponent)
+  },
   { path: '**', redirectTo: 'dashboard' }
 ];

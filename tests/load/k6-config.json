@@ -1,0 +1,36 @@
+{
+  "scenarios": {
+    "smoke": {
+      "executor": "constant-vus",
+      "vus": 5,
+      "duration": "1m",
+      "env": { "BASE_URL": "http://localhost:8080/api" }
+    },
+    "load": {
+      "executor": "ramping-vus",
+      "startVUs": 0,
+      "stages": [
+        { "duration": "2m", "target": 50 },
+        { "duration": "5m", "target": 100 },
+        { "duration": "2m", "target": 0 }
+      ],
+      "env": { "BASE_URL": "http://localhost:8080/api" }
+    },
+    "stress": {
+      "executor": "ramping-vus",
+      "startVUs": 0,
+      "stages": [
+        { "duration": "2m", "target": 100 },
+        { "duration": "5m", "target": 200 },
+        { "duration": "5m", "target": 300 },
+        { "duration": "2m", "target": 0 }
+      ],
+      "env": { "BASE_URL": "http://localhost:8080/api" }
+    }
+  },
+  "thresholds": {
+    "http_req_duration": ["p(95)<2000", "p(99)<5000"],
+    "http_req_failed": ["rate<0.01"],
+    "errors": ["rate<0.05"]
+  }
+}
