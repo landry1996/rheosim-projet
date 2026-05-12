@@ -68,11 +68,16 @@
 - [x] BLOC 5 : Flyway V4 migration (simulation_jobs table)
 - [x] BLOC 5 : ArchUnit test mis a jour (ports Simulation)
 - [x] BLOC 5 : Tests scientifiques — 11 tests de validation analytique (Maxwell, KV, Prony)
-- [x] BUILD SUCCESS — 43 tests passent, compilation validee
+- [x] BLOC 8 : Tests domain — ProjectTest (9), MaterialTest (6), ReportTest (4)
+- [x] BLOC 8 : Tests application — ProjectUseCaseTest (7), SimulationUseCaseTest (4)
+- [x] BLOC 8 : Tests infrastructure — CsvDataParserAdapterTest (6), RheologyDataValidatorAdapterTest (6)
+- [x] BLOC 8 : Tests scientifiques — ParameterIdentificationTest (3) — convergence LM sur donnees synthetiques
+- [x] BLOC 8 : JaCoCo coverage reporting (plugin configure dans parent POM)
+- [x] BUILD SUCCESS — 88 tests passent, compilation validee
 
 ## Taches En Cours
 
-- [ ] BLOC 6 : Module Reporting
+- [ ] BLOC 7 : Frontend Angular 18+
 
 ## Taches A Faire
 
