@@ -24,40 +24,45 @@
 - [x] BLOC 1 : Configuration application.yml / dev / test / secret.example
 - [x] BLOC 1 : Docker Compose (PostgreSQL, Kafka KRaft, Redis, Kafka-UI)
 - [x] BLOC 1 : .gitignore
-- [x] BLOC 2 (partiel) : Domain Identity — User, Role, RefreshToken entities
-- [x] BLOC 2 (partiel) : Ports — UserRepository, RoleRepository, RefreshTokenRepository, PasswordEncoder, TokenProvider
-- [x] BLOC 2 (partiel) : Domain Events — UserRegisteredEvent
-- [x] BLOC 2 (partiel) : Application layer — DTOs (records), AuthenticationUseCase, UserMapper
-- [x] BLOC 2 (partiel) : Infrastructure — JPA entities, JPA repositories, Adapters
-- [x] BLOC 2 (partiel) : Security — SecurityConfig, JwtAuthenticationFilter, JwtTokenProvider, BcryptPasswordEncoder
-- [x] BLOC 2 (partiel) : REST — AuthController (register, login, refresh, logout)
-- [x] BLOC 2 (partiel) : GlobalExceptionHandler
-- [x] BLOC 2 (partiel) : Kafka topics configuration
-- [x] BLOC 2 (partiel) : Flyway V1 migration (identity tables + audit_logs)
-- [x] BUILD SUCCESS — compilation validee
+- [x] BLOC 2 : Domain Identity — User, Role, RefreshToken entities
+- [x] BLOC 2 : Ports — UserRepository, RoleRepository, RefreshTokenRepository, PasswordEncoder, TokenProvider
+- [x] BLOC 2 : Domain Events — UserRegisteredEvent
+- [x] BLOC 2 : Application layer — DTOs (records), AuthenticationUseCase, UserMapper
+- [x] BLOC 2 : Infrastructure — JPA entities, JPA repositories, Adapters
+- [x] BLOC 2 : Security — SecurityConfig, JwtAuthenticationFilter, JwtTokenProvider, BcryptPasswordEncoder
+- [x] BLOC 2 : REST — AuthController (register, login, refresh, logout)
+- [x] BLOC 2 : GlobalExceptionHandler
+- [x] BLOC 2 : Kafka topics configuration
+- [x] BLOC 2 : Flyway V1 migration (identity tables + audit_logs)
+- [x] BLOC 2 : Rate limiting (Bucket4j RateLimitingFilter)
+- [x] BLOC 2 : Audit logging service (AuditService async + JdbcTemplate)
+- [x] BLOC 2 : Tests unitaires AuthenticationUseCase (7 tests)
+- [x] BLOC 2 : ArchUnit tests (5 regles hexagonales)
+- [x] BLOC 3 : Domain — Project, Material, MaterialModel, MaterialFamily, ConstitutiveModelType, ProjectStatus
+- [x] BLOC 3 : Ports — ProjectRepository, MaterialRepository
+- [x] BLOC 3 : Application — ProjectUseCase, MaterialUseCase
+- [x] BLOC 3 : DTOs — CreateProjectRequest, ProjectResponse, CreateMaterialRequest, MaterialResponse, UpdateMaterialModelRequest, MaterialModelResponse
+- [x] BLOC 3 : REST — ProjectController, MaterialController
+- [x] BLOC 3 : Infrastructure — JPA entities, JPA repositories, Adapters (ProjectRepositoryAdapter, MaterialRepositoryAdapter)
+- [x] BLOC 3 : Flyway V2 migration (projects, materials, project_materials)
+- [x] BLOC 3 : ArchUnit test mis a jour (ports Project + Material)
+- [x] BLOC 4 : Domain — Dataset, ExperimentType, DatasetStatus, DataColumn, ValidationError
+- [x] BLOC 4 : Ports — DatasetRepository, FileStoragePort, DataParserPort, DataValidatorPort
+- [x] BLOC 4 : Events — DatasetUploadedEvent, DatasetValidatedEvent
+- [x] BLOC 4 : Application — DatasetUseCase, DTOs (UploadDatasetRequest, DatasetResponse, etc.)
+- [x] BLOC 4 : Infrastructure — CsvDataParserAdapter, ExcelDataParserAdapter, RheologyDataValidatorAdapter
+- [x] BLOC 4 : Infrastructure — LocalFileStorageAdapter, DatasetRepositoryAdapter, DatasetEventPublisher
+- [x] BLOC 4 : REST — DatasetController (upload multipart, validate, list, get, delete)
+- [x] BLOC 4 : Flyway V3 migration (datasets table)
+- [x] BLOC 4 : ArchUnit test mis a jour (ports Experiment)
+- [x] BLOC 4 : Dependencies — Apache Commons CSV 1.12.0, Apache POI 5.3.0
+- [x] BUILD SUCCESS — 25 tests passent, compilation validee
 
 ## Taches En Cours
 
-- [ ] BLOC 2 (suite) : Rate limiting, Audit logging service, tests
+- [ ] BLOC 5 : Module Simulation (Compute Engine Java 1D)
 
 ## Taches A Faire
-
-### BLOC 2 — Securite & Authentification (reste)
-- [ ] Rate limiting (Bucket4j)
-- [ ] Audit logging service (persister dans audit_logs)
-- [ ] Tests unitaires AuthenticationUseCase
-- [ ] Tests integration AuthController (Testcontainers)
-- [ ] ArchUnit test (verification deps hexagonales)
-
-### BLOC 3 — Module Project & Material (Domain Core)
-- [ ] Entites Project, Material, MaterialModel, ConstitutiveModelType (domaine)
-- [ ] Ports (interfaces repository)
-- [ ] Use cases (application layer)
-- [ ] DTOs + MapStruct mappers
-- [ ] REST Controllers
-- [ ] JPA Adapters (infrastructure)
-- [ ] Flyway V2 migration
-- [ ] Tests unitaires + integration
 
 ### BLOC 4 — Module Experiment (Import & Validation)
 - [ ] Entites Dataset, Experiment, ExperimentType

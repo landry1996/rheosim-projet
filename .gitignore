@@ -45,6 +45,9 @@ rheosim-frontend/.angular/
 docker/data/
 docker/logs/
 
+# --- Uploaded data files ---
+**/data/uploads/
+
 # --- Test & Coverage ---
 *.exec
 coverage/

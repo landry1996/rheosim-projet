@@ -28,12 +28,16 @@ spring:
       group-id: rheosim-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: com.rheosim.*
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Multipart file upload
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
   # Jackson
   jackson:
@@ -79,6 +83,9 @@ rheosim:
       allow-credentials: true
     rate-limit:
       requests-per-minute: 60
+  storage:
+    path: ${RHEOSIM_STORAGE_PATH:./data/uploads}
+    max-file-size: 52428800
   compute:
     max-concurrent-jobs: 4
     job-timeout-seconds: 3600

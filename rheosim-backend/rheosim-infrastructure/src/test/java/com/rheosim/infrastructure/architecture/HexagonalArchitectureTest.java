@@ -72,6 +72,10 @@ class HexagonalArchitectureTest {
                 .orShould().implement(com.rheosim.domain.shared.AuditPort.class)
                 .orShould().implement(com.rheosim.domain.project.port.ProjectRepository.class)
                 .orShould().implement(com.rheosim.domain.project.port.MaterialRepository.class)
+                .orShould().implement(com.rheosim.domain.experiment.port.DatasetRepository.class)
+                .orShould().implement(com.rheosim.domain.experiment.port.FileStoragePort.class)
+                .orShould().implement(com.rheosim.domain.experiment.port.DataParserPort.class)
+                .orShould().implement(com.rheosim.domain.experiment.port.DataValidatorPort.class)
                 .because("Adapters must implement domain ports (hexagonal architecture)")
                 .check(allClasses);
     }
