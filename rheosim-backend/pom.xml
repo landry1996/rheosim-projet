@@ -45,6 +45,8 @@
         <poi.version>5.3.0</poi.version>
         <pdfbox.version>3.0.3</pdfbox.version>
         <bucket4j.version>8.14.0</bucket4j.version>
+        <opentelemetry.version>1.44.1</opentelemetry.version>
+        <micrometer-tracing.version>1.4.3</micrometer-tracing.version>
     </properties>
 
     <dependencyManagement>
@@ -147,6 +149,27 @@
                 <groupId>com.bucket4j</groupId>
                 <artifactId>bucket4j_jdk17-core</artifactId>
                 <version>${bucket4j.version}</version>
+            </dependency>
+
+            <!-- OpenTelemetry BOM -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Micrometer Tracing (Spring Boot integration) -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-tracing-bridge-otel</artifactId>
+                <version>${micrometer-tracing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-exporter-otlp</artifactId>
+                <version>${opentelemetry.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

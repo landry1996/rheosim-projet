@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-compute-engine
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: compute-engine
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: compute-engine
+  template:
+    metadata:
+      labels:
+        app: compute-engine
+        release: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      containers:
+        - name: compute-engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: OTEL_SERVICE_NAME
+              value: "compute-engine"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://jaeger:4317"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            grpc:
+              port: {{ .Values.healthcheck.grpcPort }}
+            initialDelaySeconds: {{ .Values.healthcheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthcheck.periodSeconds }}
+          readinessProbe:
+            grpc:
+              port: {{ .Values.healthcheck.grpcPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 3

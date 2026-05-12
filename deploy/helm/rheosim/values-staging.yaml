@@ -1,0 +1,38 @@
+global:
+  namespace: rheosim-staging
+  domain: staging.rheosim.example.com
+
+identity-service:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 3
+
+simulation-service:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+
+compute-engine:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+
+infrastructure:
+  postgresql:
+    primary:
+      persistence:
+        size: 10Gi
+  kafka:
+    controller:
+      replicaCount: 3
+    broker:
+      replicaCount: 3
+  minio:
+    persistence:
+      size: 25Gi

@@ -1,0 +1,58 @@
+global:
+  namespace: rheosim-prod
+  domain: rheosim.example.com
+
+identity-service:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+
+simulation-service:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+compute-engine:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 16
+    targetCPUUtilizationPercentage: 60
+  nodeSelector:
+    compute: "true"
+  tolerations:
+    - key: "compute"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+infrastructure:
+  postgresql:
+    primary:
+      persistence:
+        size: 20Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+  kafka:
+    controller:
+      replicaCount: 3
+    broker:
+      replicaCount: 3
+    persistence:
+      size: 20Gi
+  redis:
+    master:
+      persistence:
+        size: 10Gi
+  minio:
+    persistence:
+      size: 100Gi

@@ -104,6 +104,20 @@
             <artifactId>bucket4j_jdk17-core</artifactId>
         </dependency>
 
+        <!-- OpenTelemetry / Distributed Tracing -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Compute Engine -->
         <dependency>
             <groupId>org.apache.commons</groupId>

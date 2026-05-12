@@ -1,0 +1,66 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ .Values.global.domain }}
+        - api.{{ .Values.global.domain }}
+      secretName: rheosim-tls
+  rules:
+    - host: {{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-frontend
+                port:
+                  number: 80
+    - host: api.{{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /api/v1/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-identity-service
+                port:
+                  number: 8080
+          - path: /api/v1/projects
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-project-service
+                port:
+                  number: 8080
+          - path: /api/v1/simulations
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-simulation-service
+                port:
+                  number: 8080
+          - path: /api/v1/datasets
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-experiment-service
+                port:
+                  number: 8080
+          - path: /api/v1/reports
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-reporting-service
+                port:
+                  number: 8080

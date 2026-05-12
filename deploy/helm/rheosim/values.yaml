@@ -1,0 +1,32 @@
+global:
+  namespace: rheosim-prod
+  domain: rheosim.example.com
+  imageRegistry: ghcr.io/landry1996
+
+identity-service:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/landry1996/rheosim-identity-service
+    tag: "2.0.0"
+
+simulation-service:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/landry1996/rheosim-simulation-service
+    tag: "2.0.0"
+
+compute-engine:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/landry1996/rheosim-compute-engine
+    tag: "2.0.0"
+
+infrastructure:
+  postgresql:
+    enabled: true
+  kafka:
+    enabled: true
+  redis:
+    enabled: true
+  minio:
+    enabled: true

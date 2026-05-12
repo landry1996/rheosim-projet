@@ -1,0 +1,20 @@
+apiVersion: v2
+name: rheosim
+description: RheoSim Enterprise - Umbrella Helm Chart
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+
+dependencies:
+  - name: identity-service
+    version: "1.0.0"
+    repository: "file://../identity-service"
+  - name: simulation-service
+    version: "1.0.0"
+    repository: "file://../simulation-service"
+  - name: compute-engine
+    version: "1.0.0"
+    repository: "file://../compute-engine"
+  - name: infrastructure
+    version: "1.0.0"
+    repository: "file://../infrastructure"

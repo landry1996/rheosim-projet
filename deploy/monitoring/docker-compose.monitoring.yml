@@ -6,12 +6,24 @@ services:
     container_name: rheosim-prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts:/etc/prometheus/alerts
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: rheosim-alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
 
   grafana:
     image: grafana/grafana:latest
@@ -32,7 +44,9 @@ services:
     ports:
       - "3100:3100"
     volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
       - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -41,8 +55,20 @@ services:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "16686:16686"  # Jaeger UI
-      - "4317:4317"    # OTLP gRPC
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: rheosim-otel-collector
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"    # OTLP gRPC (entry point for all services)
       - "4318:4318"    # OTLP HTTP
+      - "8889:8889"    # Prometheus exporter
+      - "13133:13133"  # Health check
+    depends_on:
+      - jaeger
+      - loki
 
 volumes:
   prometheus_data:

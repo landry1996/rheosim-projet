@@ -1,0 +1,24 @@
+apiVersion: v2
+name: infrastructure
+description: RheoSim Infrastructure - PostgreSQL, Kafka, Redis, MinIO
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+
+dependencies:
+  - name: postgresql
+    version: "15.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: kafka
+    version: "30.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: kafka.enabled
+  - name: redis
+    version: "20.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  - name: minio
+    version: "14.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: minio.enabled

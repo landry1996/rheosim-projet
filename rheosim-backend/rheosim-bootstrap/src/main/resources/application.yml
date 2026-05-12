@@ -52,7 +52,7 @@ server:
   servlet:
     context-path: /api
 
-# Actuator
+# Actuator & Observability
 management:
   endpoints:
     web:
@@ -61,6 +61,20 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  tracing:
+    sampling:
+      probability: ${OTEL_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
 
 # OpenAPI
 springdoc:
@@ -89,3 +103,7 @@ rheosim:
   compute:
     max-concurrent-jobs: 4
     job-timeout-seconds: 3600
+    grpc:
+      host: ${RHEOSIM_COMPUTE_GRPC_HOST:localhost}
+      port: ${RHEOSIM_COMPUTE_GRPC_PORT:50051}
+      enabled: ${RHEOSIM_COMPUTE_GRPC_ENABLED:false}

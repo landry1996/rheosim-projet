@@ -1,0 +1,55 @@
+global:
+  namespace: rheosim-dev
+  domain: dev.rheosim.local
+
+identity-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+simulation-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+compute-engine:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+infrastructure:
+  postgresql:
+    primary:
+      persistence:
+        size: 5Gi
+  kafka:
+    controller:
+      replicaCount: 1
+    broker:
+      replicaCount: 1
+  minio:
+    persistence:
+      size: 10Gi
