@@ -1,5 +1,16 @@
 # RheoSim Enterprise — Plan d'Implementation V2
 
+## Statut d'Avancement
+
+| Phase | Statut | Commit | Date |
+|-------|--------|--------|------|
+| Phase 1 — Compute Engine C++ | ✅ Complete | `d3c0c33` | 2026-05-12 |
+| Phase 2 — Microservices Decomposition | ✅ Complete | `adbf883` | 2026-05-13 |
+| Phase 3 — Infrastructure & Observabilite | ✅ Complete | `cbf327b` | 2026-05-13 |
+| Phase 4 — Fonctionnalites Avancees | ✅ Complete | `ca7961c` | 2026-05-13 |
+
+---
+
 ## 1. Vision V2
 
 Passer d'un monolithe modulaire (V1) a une architecture microservices avec un moteur de calcul C++ haute performance pour la simulation 3D par elements finis (FEM).

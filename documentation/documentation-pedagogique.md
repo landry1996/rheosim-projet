@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Ce document est un guide d'apprentissage pour les developpeurs rejoignant le projet RheoSim Enterprise. Il explique les concepts architecturaux, les patterns utilises, et les fondements scientifiques de la plateforme.
+Ce document est un guide d'apprentissage pour les developpeurs rejoignant le projet RheoSim Enterprise. Il explique les concepts architecturaux, les patterns utilises, les fondements scientifiques, et les nouveaux composants V2 (C++ FEM, microservices, collaboration).
 
 ---
 
@@ -43,7 +43,7 @@ Problemes :
     ┌────────────┼─────┐  ┌───┼────────────┐
     │ ADAPTERS         │  │ ADAPTERS       │
     │ (Infrastructure) │  │ (REST/Kafka)   │
-    │ JPA, File, etc.  │  │ Controllers    │
+    │ JPA, gRPC, File  │  │ Controllers    │
     └──────────────────┘  └────────────────┘
 ```
 
@@ -53,19 +53,24 @@ Problemes :
 
 ```
 Domain (Port) :
-  interface SimulationJobRepository {
-      SimulationJob save(SimulationJob job);
-      Optional<SimulationJob> findById(UUID id);
+  interface ParameterIdentificationPort {
+      SimulationResult identify(ConstitutiveLaw law, double[] xData, ...);
   }
 
-Infrastructure (Adapter) :
-  class SimulationJobRepositoryAdapter implements SimulationJobRepository {
-      private final SimulationJobJpaRepository jpaRepo; // Spring Data
-      // ... implementation avec conversion JPA entity ↔ domain entity
+Infrastructure (Adapter V1 — Java) :
+  class LevenbergMarquardtIdentifier implements ParameterIdentificationPort {
+      // Apache Commons Math implementation
+  }
+
+Infrastructure (Adapter V2 — Routing) :
+  @Primary
+  class ComputeEngineRoutingAdapter implements ParameterIdentificationPort {
+      // Si C++ dispo → gRPC call
+      // Sinon → fallback Java local
   }
 ```
 
-**Benefice** : Le domaine ne sait pas qu'il y a une base PostgreSQL derriere. On pourrait remplacer par MongoDB sans toucher au metier.
+**Benefice** : Le domaine ne sait pas s'il y a un moteur Java ou C++ derriere. On peut ajouter un GPU engine demain sans toucher au metier.
 
 ### 1.4 Regle d'Or
 
@@ -92,6 +97,7 @@ Un bounded context est un perimetre fonctionnel autonome avec son propre vocabul
 | Experiment | Dataset, DataColumn, ExperimentType |
 | Simulation | SimulationJob, ConstitutiveLaw, FitTarget |
 | Reporting | Report, DublinCoreMetadata, ReportFormat |
+| Collaboration (V2) | Organization, Member, Invitation, ProjectRole, AuditEvent |
 
 **Regle** : Un `User` dans Identity n'est pas le meme objet qu'un `ownerId` dans Project. Chaque contexte a sa propre representation.
 
@@ -105,14 +111,19 @@ public class SimulationJob {
     public void start() { this.status = RUNNING; }
 }
 
-// VALUE OBJECT : pas d'identite, immutable, compare par valeur
-public record MaterialModel(
-    ConstitutiveModelType modelType,
-    int numberOfBranches,
-    double equilibriumModulus,
-    List<PronyBranch> branches,
-    double referenceTemperatureK
-) {}
+// VALUE OBJECT : pas d'identite, immutable, compare par valeur (record Java)
+public record Organization(
+    UUID id,
+    String name,
+    String slug,
+    UUID ownerUserId,
+    Instant createdAt,
+    Instant updatedAt
+) {
+    public static Organization create(String name, String slug, UUID ownerUserId) {
+        return new Organization(UUID.randomUUID(), name, slug, ownerUserId, Instant.now(), Instant.now());
+    }
+}
 ```
 
 ### 2.3 Domain Events
@@ -123,29 +134,27 @@ Un evenement signale que quelque chose d'important s'est passe :
 public class DatasetUploadedEvent extends DomainEvent {
     private final UUID datasetId;
     private final UUID projectId;
-    // Publie quand un dataset est uploade avec succes
 }
 ```
 
-Les events sont publies sur Kafka pour decoupler les contextes.
+Les events sont publies sur Kafka pour decoupler les contextes. En V2, ils declenchent aussi des notifications WebSocket.
 
 ### 2.4 Use Case (Application Layer)
 
 Un use case orchestre un scenario metier sans contenir de logique :
 
 ```java
-public class DatasetUseCase {
-    private final DatasetRepository repository;     // Port
-    private final FileStoragePort fileStorage;       // Port
-    private final List<DataParserPort> parsers;     // Port (strategy)
-    private final DataValidatorPort validator;       // Port
+public class OrganizationUseCase {
+    private final OrganizationRepository organizationRepository;     // Port
+    private final OrganizationMemberRepository memberRepository;     // Port
+    private final AuditEventRepository auditRepository;              // Port
     
-    public DatasetResponse upload(UploadDatasetRequest request) {
-        // 1. Trouver le parser adapte (strategy pattern)
-        // 2. Parser le fichier
-        // 3. Stocker le fichier
-        // 4. Sauvegarder l'entite
-        // 5. Publier un event
+    public Organization createOrganization(String name, String slug, UUID ownerUserId) {
+        Organization org = Organization.create(name, slug, ownerUserId);
+        org = organizationRepository.save(org);
+        memberRepository.save(OrganizationMember.create(org.id(), ownerUserId, OrganizationRole.OWNER));
+        auditRepository.save(AuditEvent.create(org.id(), ownerUserId, "CREATE", "ORGANIZATION", org.id(), "..."));
+        return org;
     }
 }
 ```
@@ -158,43 +167,72 @@ public class DatasetUseCase {
 
 **Probleme** : Plusieurs modeles rheologiques avec la meme interface mais des equations differentes.
 
-**Solution** :
+**Solution** (Java et C++) :
 
 ```java
 // Interface commune (port)
 public interface ConstitutiveLaw {
     double computeRelaxationModulus(double time, double[] params);
     double computeStorageModulus(double omega, double[] params);
-    // ...
 }
 
-// Implementations (strategies)
+// Implementation (strategy)
 public class MaxwellLaw implements ConstitutiveLaw {
     public double computeRelaxationModulus(double t, double[] p) {
         return p[0] * Math.exp(-t / p[1]); // G * exp(-t/tau)
     }
 }
+```
 
-public class PronySeriesLaw implements ConstitutiveLaw {
-    public double computeRelaxationModulus(double t, double[] p) {
-        double g = p[0]; // G_infinity
-        for (int i = 0; i < (p.length - 1) / 2; i++) {
-            g += p[1 + 2*i] * Math.exp(-t / p[2 + 2*i]);
+```cpp
+// C++ equivalent
+class ConstitutiveLaw {
+public:
+    virtual double compute_relaxation_modulus(double t, const std::vector<double>& params) = 0;
+    virtual ~ConstitutiveLaw() = default;
+};
+
+class MaxwellLaw : public ConstitutiveLaw {
+    double compute_relaxation_modulus(double t, const std::vector<double>& p) override {
+        return p[0] * std::exp(-t / p[1]);
+    }
+};
+```
+
+**Ou c'est utilise** : Compute engine (Java + C++), parsers de donnees (CSV/Excel), generateurs de rapports (PDF/CSV/JSON).
+
+### 3.2 Adapter Pattern — Routing gRPC (V2)
+
+**Probleme** : Le systeme doit pouvoir utiliser un moteur de calcul C++ distant via gRPC, mais aussi fonctionner sans (fallback Java).
+
+**Solution** :
+
+```java
+@Component
+@Primary
+public class ComputeEngineRoutingAdapter implements ParameterIdentificationPort {
+    private final ComputeEngineClient grpcClient;
+    private final LevenbergMarquardtIdentifier javaIdentifier;
+
+    public SimulationResult identify(...) {
+        if (grpcClient.isAvailable()) {
+            try {
+                return grpcClient.identify(...);
+            } catch (Exception e) {
+                log.warn("C++ failed, fallback Java");
+            }
         }
-        return g;
+        return javaIdentifier.identify(...);
     }
 }
 ```
 
-**Ou c'est utilise** : Compute engine, parsers de donnees (CSV/Excel), generateurs de rapports (PDF/CSV/JSON).
+**Lecon** : `@Primary` resout le conflit Spring quand deux beans implementent la meme interface.
 
-### 3.2 Builder Pattern — Entites Complexes
-
-**Probleme** : Constructeurs avec beaucoup de parametres, validation a la creation.
+### 3.3 Builder Pattern — Entites Complexes
 
 ```java
 public class Material {
-    // Constructeur prive
     private Material() {}
     
     public static MaterialBuilder builder() { return new MaterialBuilder(); }
@@ -202,54 +240,41 @@ public class Material {
     public static class MaterialBuilder {
         private String name;
         private MaterialFamily family;
-        // ...
         
         public Material build() {
             if (name == null || name.isBlank())
                 throw new IllegalArgumentException("name is required");
-            if (family == null)
-                throw new IllegalArgumentException("family is required");
-            
             Material m = new Material();
             m.id = UUID.randomUUID();
             m.name = name;
             m.family = family;
-            m.version = 1;
             return m;
         }
     }
 }
 ```
 
-**Note** : Lombok etant retire (incompatible Java 25), les builders sont ecrits manuellement.
+**Note** : Lombok etant retire (incompatible Java 25), les builders sont ecrits manuellement. Les value objects simples utilisent des records Java.
 
-### 3.3 Observer Pattern — Domain Events + Kafka
+### 3.4 Observer Pattern — Events + Kafka + WebSocket (V2)
 
 ```
-[SimulationJob.complete()] 
-    → publie SimulationJobCompletedEvent
-    → DatasetEventPublisher serialise en JSON
+[SimulationJob.complete()]
+    → SimulationJobCompletedEvent
     → Kafka topic "simulation.completed"
-    → (Futur) Notification service consomme
+    → NotificationService.notifySimulationCompleted()
+    → WebSocket /user/{userId}/queue/notifications
+    → Frontend signal update
 ```
 
-### 3.4 Template Method — Validation de Donnees
+### 3.5 Template Method — Validation de Donnees
 
 ```java
-// Algorithme commun de validation
 public List<ValidationError> validate(ExperimentType type, List<DataColumn> cols, List<double[]> rows) {
     List<ValidationError> errors = new ArrayList<>();
-    
-    // 1. Verifier nombre de lignes (commun)
-    if (rows.isEmpty()) errors.add(error("No data rows"));
     if (rows.size() < 3) errors.add(error("Minimum 3 points"));
-    
-    // 2. Verifier colonnes requises (specifique au type)
-    errors.addAll(validateRequiredColumns(type, cols));
-    
-    // 3. Verifier qualite des donnees (commun)
-    errors.addAll(validateDataQuality(cols, rows));
-    
+    errors.addAll(validateRequiredColumns(type, cols));      // specifique
+    errors.addAll(validateDataQuality(cols, rows));          // commun
     return errors;
 }
 ```
@@ -274,35 +299,29 @@ Un materiau **viscoelastique** combine :
 
 - **Relaxation** : G(t) = G * exp(-t/tau) avec tau = eta/G
 - **Interpretation** : Le materiau relaxe sa contrainte exponentiellement
-- **Exemple** : Polymere fondu soumis a une deformation constante
 
 #### Modele de Kelvin-Voigt (ressort + amortisseur en parallele)
 
 ```
     ┌───[G]───┐
-    │         │
     ├───[η]───┤
-    │         │
     └─────────┘
 ```
 
 - **Fluage** : J(t) = (1/G) * (1 - exp(-t/tau))
 - **Interpretation** : Le materiau se deforme progressivement vers un equilibre
-- **Exemple** : Elastomere sous charge constante
 
 #### Serie de Prony (N elements de Maxwell en parallele)
 
 ```
     ┌───[G₁]───[η₁]───┐
     ├───[G₂]───[η₂]───┤
-    ├───[G₃]───[η₃]───┤
-    ├───[G∞]───────────┤  (ressort seul = equilibre)
+    ├───[G∞]───────────┤  (equilibre)
     └──────────────────┘
 ```
 
 - **Relaxation** : G(t) = G_inf + Σ G_i * exp(-t/tau_i)
 - **Interpretation** : Spectre de temps de relaxation (plusieurs mecanismes)
-- **Exemple** : Polymere reel avec distribution de masses molaires
 
 ### 4.2 Domaine Frequentiel
 
@@ -310,7 +329,7 @@ En sollicitation oscillatoire (omega = pulsation) :
 
 - **Module de conservation** G'(omega) : energie stockee (elastique)
 - **Module de perte** G''(omega) : energie dissipee (visqueuse)
-- **Viscosité complexe** |eta*| = sqrt(G'² + G''²) / omega
+- **Viscosite complexe** |eta*| = sqrt(G'² + G''²) / omega
 
 Pour Maxwell :
 ```
@@ -318,95 +337,209 @@ G'(omega)  = G * (omega*tau)² / (1 + (omega*tau)²)
 G''(omega) = G * (omega*tau)  / (1 + (omega*tau)²)
 ```
 
-**Propriete** : G'' est maximal quand omega*tau = 1 (pic de dissipation).
+### 4.3 Identification Parametrique (Levenberg-Marquardt)
 
-### 4.3 Identification Parametrique
+**Objectif** : Trouver les parametres qui ajustent au mieux les donnees experimentales.
 
-**Objectif** : Trouver les parametres [G, tau] (ou [G_inf, G_i, tau_i]) qui ajustent au mieux les donnees experimentales.
+**Principe** : minimiser S(p) = Σ [y_exp(i) - y_model(x_i, p)]²
 
-**Methode : Levenberg-Marquardt**
-
-C'est un algorithme iteratif qui minimise :
-```
-S(p) = Σ [y_exp(i) - y_model(x_i, p)]²
-```
-
-Principe :
 1. Partir d'une estimation initiale p₀
-2. Calculer le Jacobien J (derivees partielles de chaque residuel par rapport a chaque parametre)
+2. Calculer le Jacobien J (derivees partielles)
 3. Resoudre : delta_p = (J^T * J + lambda * I)^(-1) * J^T * r
-   - Si lambda grand → pas de gradient (prudent)
-   - Si lambda petit → pas de Gauss-Newton (rapide pres du minimum)
+   - lambda grand → pas de gradient (prudent)
+   - lambda petit → pas de Gauss-Newton (rapide)
 4. Ajuster lambda selon le progres
-5. Repeter jusqu'a convergence
+5. Repeter jusqu'a convergence (tolerance 10⁻¹²)
 
-**Dans RheoSim** :
-- Jacobien numerique (differences centrales) : J_ij ≈ [f(p+h) - f(p-h)] / (2h)
-- Contraintes bornees : parametres physiques toujours positifs
-- Critere de convergence : variation relative < 10⁻¹²
+**R²** = 1 - SS_res / SS_tot (1 = parfait, 0 = inutile)
 
-### 4.4 Coefficient R²
+### 4.4 Methode des Elements Finis 3D (V2)
+
+#### Principe
+
+Resoudre l'equation d'equilibre K * u = F sur un maillage tetraedrique :
+- K = matrice de rigidite globale (assemblee a partir des elements)
+- u = vecteur de deplacements inconnus
+- F = vecteur des forces externes
+
+#### Element Tetraedre P1
+
+Un tetraedre a 4 noeuds avec interpolation lineaire. Chaque noeud a 3 DDL (ux, uy, uz), donc l'element a 12 DDL.
 
 ```
-R² = 1 - SS_res / SS_tot
-
-SS_res = Σ (y_exp - y_fit)²      (residus)
-SS_tot = Σ (y_exp - y_mean)²     (variance totale)
+Matrice de deformation B (6×12) : relie deformations aux deplacements
+Matrice de comportement D (6×6) : relie contraintes aux deformations
+Matrice de rigidite elementaire : Ke = V * B^T * D * B
 ```
 
-- R² = 1 : ajustement parfait
-- R² = 0 : le modele predit la moyenne (inutile)
-- R² < 0 : le modele est pire que la moyenne
+#### Viscoelasticite en FEM
 
-**En pratique** : R² > 0.99 = bon ajustement pour un modele viscoelastique simple.
+Pour un modele de Maxwell generalise avec schema d'Euler implicite :
 
----
+```
+D_eff(dt) = D_elastic * (dt / (dt + tau))
+```
 
-## 5. Guide du Developpeur
+Le module effectif depend du pas de temps dt. Pour une serie de Prony :
+```
+D_eff = D_inf + Σ D_i * (dt / (dt + tau_i))
+```
 
-### 5.1 Ajouter un Nouveau Modele Constitutif
+#### Assemblage (OpenMP)
 
-1. **Creer l'implementation dans infrastructure** :
-
-```java
-// rheosim-infrastructure/.../engine/PowerLawFluid.java
-public class PowerLawFluid implements ConstitutiveLaw {
-    // params = [K (consistency), n (power index)]
-    
-    @Override
-    public double computeRelaxationModulus(double t, double[] params) {
-        // ... implementation specifique
+```cpp
+#pragma omp parallel
+{
+    std::vector<Triplet> local_triplets;
+    #pragma omp for
+    for (int e = 0; e < num_elements; ++e) {
+        Matrix12d Ke = compute_element_stiffness(e);
+        // Ajouter aux triplets locaux
     }
-    
-    @Override
-    public int getParameterCount() { return 2; }
-    
-    @Override
-    public String[] getParameterNames() { return new String[]{"K", "n"}; }
+    #pragma omp critical
+    global_triplets.insert(end, local_triplets.begin(), local_triplets.end());
+}
+K.setFromTriplets(global_triplets.begin(), global_triplets.end());
+```
+
+#### Conditions Limites (Methode de Penalite)
+
+```cpp
+double penalty = 1e20;
+for (auto dof : fixed_dofs) {
+    K.coeffRef(dof, dof) += penalty;
+    F(dof) = penalty * prescribed_value;
 }
 ```
 
-2. **Ajouter dans l'enum** `ConstitutiveModelType` (domain)
-3. **Enregistrer dans le processor** : ajouter le mapping type → implementation
-4. **Ecrire des tests** : solutions analytiques connues
-5. **Ajouter dans le frontend** : option dans le select de SimulationComponent
+Simple a implementer et fonctionne bien pour les cas ou les conditions sont strictes.
 
-### 5.2 Ajouter un Nouveau Type d'Experience
+---
 
-1. **Ajouter dans l'enum** `ExperimentType` (domain)
-2. **Definir les colonnes requises** dans `RheologyDataValidatorAdapter`
-3. **Mettre a jour le frontend** : option dans DatasetUploadComponent
-4. **Ecrire des tests** : cas valide + cas invalide
+## 5. Microservices & Communication (V2)
 
-### 5.3 Ajouter un Endpoint API
+### 5.1 Pourquoi les Microservices
 
-1. **Definir le DTO** dans `rheosim-application` (record Java)
-2. **Creer/modifier le Use Case** dans `rheosim-application`
-3. **Creer le Controller** dans `rheosim-infrastructure`
-4. **Documenter** : annotations OpenAPI (@Operation, @ApiResponse)
-5. **Tester** : test unitaire du use case + test du controller
+Le monolithe modulaire V1 est limite :
+- Un seul deployable → un changement de l'auth redeploy tout
+- Scaling uniforme → le compute ne peut pas scaler independamment
+- Technologie unique → pas de C++ pour le FEM
 
-### 5.4 Conventions de Code
+### 5.2 Communication gRPC
+
+**Avantages par rapport a REST** :
+- Protobuf binaire : 5-10x plus compact que JSON
+- Streaming bidirectionnel : progression simulation
+- Typage fort : contrat `.proto` partage
+- HTTP/2 : multiplexage, compression headers
+
+```protobuf
+service ComputeEngine {
+    rpc Identify(IdentificationRequest) returns (IdentificationResponse);
+    rpc SimulateFEM(FEMRequest) returns (stream FEMProgress);
+    rpc HealthCheck(Empty) returns (HealthResponse);
+}
+```
+
+### 5.3 Pattern Routing + Fallback
+
+Le `ComputeEngineRoutingAdapter` illustre un pattern resilience :
+1. Tester la disponibilite (health check)
+2. Tenter l'appel principal (C++)
+3. En cas d'echec, fallback sur implementation locale (Java)
+4. Logger le fallback pour monitoring
+
+Ce pattern evite un single point of failure sur le compute engine.
+
+### 5.4 Event-Driven avec Kafka
+
+Chaque service publie des events pour informer les autres :
+- `simulation.completed` → Notification service → WebSocket
+- `dataset.uploaded` → Validation async
+- `invitation.sent` → Email service (futur)
+
+Les events sont des faits immuables — "il s'est passe X" plutot que "fais Y".
+
+---
+
+## 6. Observabilite (V2)
+
+### 6.1 Les 3 Piliers
+
+| Pilier | Outil | Question |
+|--------|-------|----------|
+| **Metriques** | Prometheus + Grafana | "Combien ?" (latence, throughput, erreurs) |
+| **Logs** | Loki | "Que s'est-il passe ?" (details textuels) |
+| **Traces** | Jaeger + OTel | "Ou est le temps passe ?" (chemin d'une requete) |
+
+### 6.2 Tracing Distribue
+
+Une requete traverse plusieurs services :
+```
+Frontend → Ingress → Identity (auth) → Simulation → Compute Engine (gRPC) → PostgreSQL
+```
+
+OpenTelemetry genere un `traceId` unique qui suit la requete a travers tous les services. Chaque etape est un `span` avec duree et metadata.
+
+**Configuration Spring Boot** :
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://otel-collector:4318/v1/traces
+```
+
+### 6.3 Alerting
+
+Les regles Prometheus declenchent des alertes :
+```yaml
+- alert: HighLatencyP95
+  expr: histogram_quantile(0.95, ...) > 2
+  for: 5m
+  labels:
+    severity: warning
+```
+
+Alertmanager route vers Slack (warning) ou PagerDuty (critical).
+
+---
+
+## 7. Guide du Developpeur
+
+### 7.1 Ajouter un Nouveau Modele Constitutif
+
+**Java** :
+1. Implementer `ConstitutiveLaw` dans `infrastructure/.../engine/`
+2. Ajouter dans l'enum `ConstitutiveModelType` (domain)
+3. Enregistrer dans le processor : mapping type → implementation
+4. Ecrire des tests : solutions analytiques connues
+
+**C++** :
+1. Creer header dans `include/rheosim/` heritant de `ConstitutiveLaw`
+2. Implementer dans `src/`
+3. Ajouter le mapping dans `grpc_server.cpp`
+4. Tests GoogleTest avec cas analytiques
+
+### 7.2 Ajouter un Endpoint API
+
+1. Definir le DTO dans `rheosim-application` (record Java)
+2. Creer/modifier le Use Case dans `rheosim-application`
+3. Creer le Controller dans `rheosim-infrastructure`
+4. Documenter : annotations OpenAPI (@Operation, @ApiResponse)
+5. Tester : test unitaire du use case + test du controller
+
+### 7.3 Ajouter un Composant Frontend
+
+1. Creer un composant standalone dans `features/`
+2. Utiliser signals pour l'etat local
+3. Injecter le service HTTP correspondant
+4. Ajouter la route lazy-loaded dans `app.routes.ts`
+5. Pour la 3D : utiliser `MeshViewerComponent` comme base
+
+### 7.4 Conventions de Code
 
 | Element | Convention |
 |---------|-----------|
@@ -414,12 +547,14 @@ public class PowerLawFluid implements ConstitutiveLaw {
 | Value Objects | Records Java (immutables) |
 | DTOs | Records Java |
 | Ports | Interfaces dans `domain/.../port/` |
-| Adapters | Classes dans `infrastructure/.../adapter/` |
-| Controllers | Dans `infrastructure/.../adapter/` (c'est un adapter REST) |
+| Adapters | Classes dans `infrastructure/` |
+| Controllers | Dans `infrastructure/` (c'est un adapter REST) |
 | Tests | `*Test.java`, @DisplayName descriptif |
 | Packages | `com.rheosim.{layer}.{context}.{type}` |
+| C++ headers | `include/rheosim/` avec guards |
+| C++ sources | `src/` avec fichier par classe |
 
-### 5.5 Commandes Utiles
+### 7.5 Commandes Utiles
 
 ```bash
 # Backend
@@ -435,15 +570,28 @@ npm start                             # Dev server (localhost:4200)
 npm run build                         # Build production
 npm test                              # Tests unitaires
 
+# C++ Compute Engine
+cd rheosim-compute
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . -j$(nproc)
+ctest --output-on-failure             # Run tests
+
 # Docker
-cd docker
-docker compose up -d                  # Infra locale (PG, Kafka, Redis)
-docker compose -f docker-compose.prod.yml up --build  # Full stack
+docker compose -f docker/docker-compose.prod.yml up --build
+docker compose -f deploy/monitoring/docker-compose.monitoring.yml up -d
+
+# Kubernetes
+helm install rheosim deploy/helm/rheosim -f deploy/helm/rheosim/values-dev.yaml
+helm upgrade rheosim deploy/helm/rheosim -f deploy/helm/rheosim/values-prod.yaml
+
+# Load testing
+k6 run tests/load/k6-simulation-load.js
 ```
 
 ---
 
-## 6. Exercices Pratiques
+## 8. Exercices Pratiques
 
 ### Exercice 1 : Comprendre l'architecture
 
@@ -456,7 +604,7 @@ docker compose -f docker-compose.prod.yml up --build  # Full stack
 
 1. Implementer le modele de Burgers (Maxwell + Kelvin-Voigt en serie)
    - J(t) = 1/G₁ + t/eta₁ + (1/G₂)(1 - exp(-t*G₂/eta₂))
-2. Ecrire 3 tests de validation analytique
+2. Ecrire 3 tests de validation analytique (Java et C++)
 3. Lancer une identification sur des donnees synthetiques
 
 ### Exercice 3 : Tracer le flux d'un upload
@@ -468,39 +616,66 @@ Suivre le chemin complet d'un upload de fichier CSV :
 4. `LocalFileStorageAdapter.store()` → sauvegarde fichier
 5. `DatasetRepositoryAdapter.save()` → persistence BDD
 6. `DatasetEventPublisher.publish()` → event Kafka
+7. `NotificationService.notifyDatasetReady()` → WebSocket (V2)
 
-### Exercice 4 : Frontend — Ajouter un ecran
+### Exercice 4 : Comprendre le routing gRPC (V2)
 
-1. Creer un composant `MaterialDetailComponent` dans `features/materials/`
-2. Afficher les proprietes du materiau et son modele constitutif
-3. Ajouter la route lazy-loaded dans `app.routes.ts`
-4. Naviguer depuis le dashboard
+1. Lire `ComputeEngineRoutingAdapter.java`
+2. Identifier les 3 chemins possibles (gRPC ok, gRPC fail, pas de gRPC)
+3. Expliquer pourquoi `@Primary` est necessaire
+4. Simuler un fallback en mettant `grpc.enabled=false`
+
+### Exercice 5 : Visualisation 3D (V2)
+
+1. Ouvrir `mesh-viewer.component.ts`
+2. Comprendre la decomposition tetraedre → 4 faces triangulaires
+3. Modifier l'echelle de couleur (HSL → autre mapping)
+4. Ajouter un bouton pour exporter la scene en capture d'ecran
+
+### Exercice 6 : Deployer sur Kubernetes (V2)
+
+1. Lire `deploy/helm/rheosim/Chart.yaml` et ses dependances
+2. Comparer `values-dev.yaml` et `values-prod.yaml`
+3. Expliquer pourquoi le compute-engine a un `nodeSelector`
+4. Ajouter un nouveau service dans le umbrella chart
 
 ---
 
-## 7. Ressources Complementaires
+## 9. Ressources Complementaires
 
-### 7.1 Rheologie et Viscoelasticite
+### 9.1 Rheologie et Viscoelasticite
 
 - Ferry, J.D. — *Viscoelastic Properties of Polymers* (reference)
 - Tschoegl, N.W. — *The Phenomenological Theory of Linear Viscoelastic Behavior*
 - Macosko, C.W. — *Rheology: Principles, Measurements, and Applications*
 
-### 7.2 Architecture Logicielle
+### 9.2 Architecture Logicielle
 
 - Vernon, V. — *Implementing Domain-Driven Design*
 - Cockburn, A. — *Hexagonal Architecture* (article original)
 - Martin, R.C. — *Clean Architecture*
+- Newman, S. — *Building Microservices* (2nd ed.)
 
-### 7.3 Optimisation Numerique
+### 9.3 Elements Finis
+
+- Zienkiewicz, O.C. — *The Finite Element Method* (reference FEM)
+- Hughes, T.J.R. — *The Finite Element Method: Linear Static and Dynamic Analysis*
+- Eigen documentation — sparse solvers, parallelism
+
+### 9.4 Optimisation Numerique
 
 - Levenberg (1944) — "A Method for the Solution of Certain Non-Linear Problems in Least Squares"
 - Marquardt (1963) — "An Algorithm for Least-Squares Estimation of Nonlinear Parameters"
 - Press et al. — *Numerical Recipes* (chapitre 15 : Modeling of Data)
 
-### 7.4 Technologies
+### 9.5 Technologies
 
 - [Spring Boot Reference](https://docs.spring.io/spring-boot/docs/current/reference/html/)
 - [Angular Documentation](https://angular.dev)
-- [Apache Commons Math Javadoc](https://commons.apache.org/proper/commons-math/javadocs/api-3.6.1/)
-- [Chart.js Documentation](https://www.chartjs.org/docs/)
+- [gRPC Documentation](https://grpc.io/docs/)
+- [Three.js Documentation](https://threejs.org/docs/)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Helm Documentation](https://helm.sh/docs/)
+- [OpenTelemetry](https://opentelemetry.io/docs/)
+- [Prometheus Alerting Rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
+- [k6 Load Testing](https://k6.io/docs/)

@@ -4,23 +4,30 @@
 
 ### 1.1 Objectif
 
-RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique destinee aux ingenieurs materiaux et chercheurs en rheologie. Elle permet d'importer des donnees experimentales, d'identifier les parametres de lois de comportement constitutives, et de generer des rapports professionnels.
+RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique destinee aux ingenieurs materiaux et chercheurs en rheologie. Elle permet d'importer des donnees experimentales, d'identifier les parametres de lois de comportement constitutives (1D et 3D FEM), de collaborer en equipe, et de generer des rapports professionnels.
 
-### 1.2 Perimetre V1
+### 1.2 Perimetre
 
-| Capacite | Description |
-|----------|-------------|
-| Simulation 1D/2D | Modeles viscoelastiques lineaires (Maxwell, Kelvin-Voigt, series de Prony) |
-| Import de donnees | CSV et Excel (fluage, relaxation, oscillation, courbes d'ecoulement) |
-| Identification parametrique | Algorithme de Levenberg-Marquardt avec contraintes bornees |
-| Generation de rapports | PDF, CSV, JSON avec metadonnees Dublin Core |
-| Multi-utilisateurs | Authentification JWT, roles (USER, ADMIN), projets separes |
+| Capacite | V1 | V2 |
+|----------|----|----|
+| Simulation 1D/2D | Maxwell, Kelvin-Voigt, Prony | Conserve |
+| Simulation 3D FEM | - | Tetraedres P1, integration viscoelastique |
+| Import de donnees | CSV, Excel | + MinIO S3 storage |
+| Identification parametrique | Levenberg-Marquardt Java | + C++ haute performance (gRPC) |
+| Generation de rapports | PDF, CSV, JSON | + export VTK (3D) |
+| Multi-utilisateurs | JWT, roles USER/ADMIN | + RBAC par projet (OWNER/EDITOR/VIEWER) |
+| Collaboration | - | Organisations, invitations, audit trail |
+| Multi-tenant | - | Isolation par organisation |
+| Notifications temps reel | - | WebSocket STOMP/SockJS |
+| Visualisation 3D | - | Three.js (deformation, contraintes) |
+| Observabilite | Actuator | Prometheus + Grafana + Jaeger + Loki |
 
 ### 1.3 Utilisateurs Cibles
 
-- **Ingenieur materiaux** : importe ses donnees experimentales, lance des identifications parametriques, genere des rapports
-- **Chercheur en rheologie** : calibre des modeles constitutifs, compare les resultats avec des donnees experimentales
+- **Ingenieur materiaux** : importe ses donnees experimentales, lance des identifications parametriques, visualise les deformations 3D
+- **Chercheur en rheologie** : calibre des modeles constitutifs, compare les resultats avec des donnees experimentales, partage des projets
 - **Responsable qualite** : consulte les rapports generes, verifie la convergence des identifications
+- **Chef de projet** : gere les organisations, invite des collaborateurs, consulte l'audit trail
 
 ---
 
@@ -44,6 +51,7 @@ RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique 
 - Email doit etre unique dans le systeme
 - Refresh token a usage unique (rotation a chaque utilisation)
 - Les tokens expires sont nettoyes periodiquement
+- JWT signe en RS256 (asymetrique) — cle publique distribuee aux microservices
 
 ### 2.2 Module Projets (Project)
 
@@ -54,8 +62,9 @@ RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique 
 | Creer un projet | Nom + description. Statut initial = DRAFT. |
 | Activer un projet | Passage de DRAFT a ACTIVE. |
 | Archiver un projet | Passage a ARCHIVED (lecture seule). |
-| Lister les projets | Tous les projets de l'utilisateur connecte. |
+| Lister les projets | Projets de l'utilisateur + projets partages avec lui. |
 | Associer des materiaux | Un projet contient N materiaux. |
+| Partager un projet | Inviter un collaborateur avec un role (EDITOR, VIEWER). |
 
 **Cycle de vie** :
 ```
@@ -65,11 +74,13 @@ DRAFT → ACTIVE → ARCHIVED
 **Regles metier** :
 - Un projet ne peut etre active que s'il contient au moins un materiau
 - Un projet archive ne peut plus etre modifie
-- Seul le proprietaire peut modifier son projet
+- Seul le proprietaire (OWNER) peut archiver ou supprimer un projet
+- Les EDITOR peuvent modifier le contenu, les VIEWER ne font que consulter
+- Un projet est isole par organisation (multi-tenant)
 
 ### 2.3 Module Materiaux (Material)
 
-**Acteurs** : Utilisateur authentifie
+**Acteurs** : Utilisateur authentifie (OWNER ou EDITOR du projet)
 
 | Fonctionnalite | Description |
 |----------------|-------------|
@@ -84,16 +95,14 @@ DRAFT → ACTIVE → ARCHIVED
 - Maxwell (1 branche) : G, tau
 - Kelvin-Voigt : G, tau
 - Prony (N branches) : G_inf, {G_i, tau_i} pour i=1..N
-- Power-Law (prevu V2)
-- Carreau-Yasuda (prevu V2)
 
 ### 2.4 Module Donnees Experimentales (Experiment)
 
-**Acteurs** : Utilisateur authentifie
+**Acteurs** : Utilisateur authentifie (OWNER ou EDITOR)
 
 | Fonctionnalite | Description |
 |----------------|-------------|
-| Importer un fichier | Upload CSV ou Excel (max 50 Mo). |
+| Importer un fichier | Upload CSV ou Excel (max 50 Mo). Stockage MinIO (V2). |
 | Validation automatique | Verification colonnes requises, types, valeurs aberrantes. |
 | Lister les datasets | Par projet, avec filtre par statut. |
 | Supprimer un dataset | Suppression du fichier et de la reference. |
@@ -123,19 +132,29 @@ UPLOADED → VALIDATING → VALID / INVALID → PROCESSING
 
 ### 2.5 Module Simulation (Compute)
 
-**Acteurs** : Utilisateur authentifie
+**Acteurs** : Utilisateur authentifie (OWNER ou EDITOR)
 
 | Fonctionnalite | Description |
 |----------------|-------------|
-| Soumettre un job | Choix du materiau, dataset, type de simulation, cible d'ajustement. |
-| Suivi du statut | Polling du statut (QUEUED → RUNNING → COMPLETED/FAILED). |
+| Soumettre un job 1D | Identification parametrique classique (Java ou C++ engine). |
+| Soumettre un job 3D FEM | Simulation par elements finis 3D (C++ engine obligatoire). |
+| Suivi du statut | Polling ou WebSocket (QUEUED → RUNNING → COMPLETED/FAILED). |
+| Suivi de progression | Barre de progression temps reel via WebSocket. |
 | Consulter les resultats | Parametres identifies, R², nb iterations, courbe ajustee. |
+| Visualiser les resultats 3D | Maillage + deformation + contraintes Von Mises (Three.js). |
 | Annuler un job | Annulation d'un job en attente ou en cours. |
 
 **Types de simulation** :
 - **PARAMETER_IDENTIFICATION** : identification des parametres d'un modele constitutif a partir de donnees experimentales
-- **FORWARD_SIMULATION** : calcul de la reponse d'un modele avec des parametres donnes (prevu)
-- **SENSITIVITY_ANALYSIS** : analyse de sensibilite parametrique (prevu)
+- **FEM_3D** : simulation par elements finis 3D (maillage tetraedrique, viscoelasticite)
+- **FORWARD_SIMULATION** : calcul de la reponse d'un modele avec des parametres donnes
+
+**Routage compute engine** :
+```
+Job soumis → ComputeEngineRoutingAdapter
+             ├── C++ gRPC engine (si disponible et mode 3D)
+             └── Java engine (fallback ou mode 1D)
+```
 
 **Cibles d'ajustement (FitTarget)** :
 - RELAXATION_MODULUS : G(t)
@@ -150,11 +169,13 @@ UPLOADED → VALIDATING → VALID / INVALID → PROCESSING
 - Convergence (oui/non)
 - Parametres identifies avec noms
 - Courbe ajustee (serie temporelle)
+- Champs 3D : deplacements, contraintes Von Mises (mode FEM)
 
 **Regles metier** :
 - Maximum 4 jobs concurrents par instance
 - Timeout d'un job : 1 heure
 - Un job CANCELLED ne peut pas etre relance
+- Les jobs FEM 3D sont routes vers le C++ engine exclusivement
 
 ### 2.6 Module Rapports (Reporting)
 
@@ -172,11 +193,60 @@ UPLOADED → VALIDATING → VALID / INVALID → PROCESSING
 - Informations projet et materiau
 - Parametres du modele constitutif
 - Metriques de qualite d'ajustement
+- Courbes ajustees (si disponibles)
 
 **Cycle de vie** :
 ```
 GENERATING → READY / FAILED → EXPIRED
 ```
+
+### 2.7 Module Collaboration (V2)
+
+**Acteurs** : Utilisateur authentifie
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Creer une organisation | Nom + slug (URL-friendly). Createur = OWNER. |
+| Inviter un membre | Par email, avec role (ADMIN, MEMBER). Expiration 7 jours. |
+| Accepter une invitation | L'invite rejoint l'organisation avec le role attribue. |
+| Partager un projet | Ajouter un collaborateur avec role EDITOR ou VIEWER. |
+| Audit trail | Historique complet des actions par utilisateur et par organisation. |
+| Retirer un membre | L'OWNER ou ADMIN peut retirer un membre de l'organisation. |
+
+**Roles Organisation** :
+
+| Role | Permissions |
+|------|-------------|
+| OWNER | Tout (creer, inviter, supprimer, gerer les roles) |
+| ADMIN | Inviter, retirer des membres, gerer les projets |
+| MEMBER | Acceder aux projets partages selon leur role projet |
+
+**Roles Projet** :
+
+| Role | Permissions |
+|------|-------------|
+| OWNER | Tout (CRUD complet, archiver, supprimer, partager) |
+| EDITOR | Modifier le contenu (materiaux, datasets, simulations) |
+| VIEWER | Lecture seule (consulter projets et resultats) |
+
+**Regles metier** :
+- Une organisation a un seul OWNER (le createur)
+- Un utilisateur peut appartenir a plusieurs organisations
+- L'isolation multi-tenant filtre automatiquement par organization_id
+- Les invitations expirent apres 7 jours si non acceptees
+
+### 2.8 Module Notifications (V2)
+
+**Acteurs** : Tous les utilisateurs connectes
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Simulation terminee | Notification push quand un job complete ou echoue. |
+| Invitation recue | Notification quand l'utilisateur est invite a une organisation. |
+| Projet partage | Notification quand un projet est partage avec l'utilisateur. |
+| Progression simulation | Stream temps reel de la progression d'un job. |
+
+**Technologie** : WebSocket STOMP sur SockJS, destinations personnelles (`/user/{id}/queue/notifications`) et broadcast (`/topic/simulations/{id}`).
 
 ---
 
@@ -196,18 +266,42 @@ GENERATING → READY / FAILED → EXPIRED
 8. L'utilisateur genere un rapport PDF
 9. Le rapport contient les parametres identifies et les metadonnees Dublin Core
 
+### 3.2 Scenario : Simulation FEM 3D d'une piece polymere (V2)
+
+1. L'utilisateur se connecte et selectionne une organisation
+2. Il cree un projet "Analyse Poutre HDPE"
+3. Il importe un maillage tetraedrique (.msh)
+4. Il soumet un job FEM 3D avec un modele Prony 3 branches
+5. Le job est route vers le C++ compute engine (gRPC)
+6. L'utilisateur suit la progression en temps reel via WebSocket
+7. Une fois termine, il visualise le maillage deforme en 3D (Three.js)
+8. Les champs de contraintes Von Mises sont affiches en echelle de couleur
+9. Il exporte les resultats en format VTK pour post-traitement ParaView
+
+### 3.3 Scenario : Collaboration en equipe (V2)
+
+1. Le chef de projet cree une organisation "Equipe Polymeres BASF"
+2. Il invite 3 collegues par email (2 MEMBER, 1 ADMIN)
+3. Les collegues acceptent l'invitation via notification WebSocket
+4. Le chef partage le projet "SBR 2024" avec role EDITOR pour 2 collegues
+5. Le 3e collegue (stagiaire) recoit un acces VIEWER
+6. Chaque modification est tracee dans l'audit trail
+7. L'ADMIN peut consulter l'historique complet des actions
+
 ---
 
-## 4. Contraintes et Limites V1
+## 4. Contraintes et Limites
 
-| Contrainte | Detail |
-|------------|--------|
-| Taille fichier max | 50 Mo par upload |
-| Jobs concurrents | 4 maximum par instance |
-| Modeles 1D uniquement | Pas de FEM 3D en V1 |
-| Pas de collaboration | Un projet = un proprietaire |
-| Pas de versioning datasets | Un dataset importe est immuable |
-| Formats rapport | PDF, CSV, JSON (pas de DOCX) |
+| Contrainte | V1 | V2 |
+|------------|----|----|
+| Taille fichier max | 50 Mo | 50 Mo (MinIO) |
+| Jobs concurrents | 4 par instance | 4 par pod, scalable HPA |
+| Modeles | 1D uniquement | 1D + FEM 3D |
+| Collaboration | Pas de partage | Organisations + roles |
+| Notifications | Polling | WebSocket temps reel |
+| Deployment | Docker Compose | Kubernetes + Helm |
+| Monitoring | Actuator | Prometheus + Grafana + Jaeger |
+| Load | ~10 users | 100+ users (k6 valide) |
 
 ---
 
@@ -225,3 +319,11 @@ GENERATING → READY / FAILED → EXPIRED
 | **Levenberg-Marquardt** | Algorithme d'optimisation non-lineaire pour moindres carres |
 | **R²** | Coefficient de determination (qualite de l'ajustement, 1 = parfait) |
 | **Dublin Core** | Standard de metadonnees pour la description de documents |
+| **FEM** | Methode des Elements Finis (resolution d'EDP sur un maillage) |
+| **Tetraedre P1** | Element fini volumique a 4 noeuds, interpolation lineaire |
+| **Von Mises** | Critere de contrainte equivalente pour les materiaux ductiles |
+| **gRPC** | Framework RPC haute performance (Google Protocol Buffers) |
+| **STOMP** | Protocole de messagerie texte sur WebSocket |
+| **HPA** | Horizontal Pod Autoscaler (Kubernetes) |
+| **OpenTelemetry** | Standard de traces distribuees et metriques |
+| **Multi-tenant** | Architecture ou plusieurs organisations partagent une meme infrastructure avec isolation |
