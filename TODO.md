@@ -77,45 +77,29 @@
 
 ## Taches En Cours
 
-- [ ] BLOC 7 : Frontend Angular 18+
+(aucune)
+
+## Taches Terminees (suite)
+
+- [x] BLOC 7 : Frontend Angular 21 standalone
+  - [x] Setup Angular 21+ standalone (CLI 21.2.3, Chart.js)
+  - [x] Core : models (User, Project, Material, Dataset, Simulation, Report)
+  - [x] Core : services (Auth, Project, Material, Dataset, Simulation, Report)
+  - [x] Core : guards (authGuard, guestGuard)
+  - [x] Core : interceptors (authInterceptor avec refresh token)
+  - [x] Shared : NavbarComponent, SidebarComponent
+  - [x] Feature : LoginComponent, RegisterComponent
+  - [x] Feature : DashboardComponent (CRUD projets, stats)
+  - [x] Feature : DatasetUploadComponent (drag & drop, multipart)
+  - [x] Feature : DatasetListComponent (table, status badges)
+  - [x] Feature : SimulationComponent (calibration + Chart.js)
+  - [x] Feature : ReportsComponent (generation + download)
+  - [x] Routing lazy-loaded avec guards
+  - [x] Proxy config pour dev (backend localhost:8080)
+  - [x] Environments (dev / prod)
+  - [x] BUILD SUCCESS — ng build OK, tous les chunks generes
 
 ## Taches A Faire
-
-### BLOC 4 — Module Experiment (Import & Validation)
-- [ ] Entites Dataset, Experiment, ExperimentType
-- [ ] Import CSV/Excel (parsers)
-- [ ] Pipeline de validation des donnees
-- [ ] Stockage fichiers (local / S3)
-- [ ] Events Kafka pour notification
-
-### BLOC 5 — Module Simulation (Compute Engine Java 1D)
-- [ ] Interface ConstitutiveLaw (port)
-- [ ] Implementation Maxwell, KelvinVoigt, Prony-N
-- [ ] Identification parametrique (L-BFGS-B via Apache Commons Math)
-- [ ] Job lifecycle (QUEUED, RUNNING, COMPLETED, FAILED)
-- [ ] Event-driven job processing via Kafka
-- [ ] Resultats : series temporelles + metriques
-
-### BLOC 6 — Module Reporting
-- [ ] Generation PDF (Apache PDFBox)
-- [ ] Templates de rapports
-- [ ] Export CSV, JSON
-- [ ] Metadonnees Dublin Core
-
-### BLOC 7 — Frontend Angular
-- [ ] Setup Angular 18+ standalone
-- [ ] Module Auth (login, register, guards)
-- [ ] Dashboard
-- [ ] Ecran upload dataset
-- [ ] Ecran calibration modele
-- [ ] Ecran resultats + graphiques (Chart.js)
-- [ ] Ecran generation rapport
-
-### BLOC 8 — Tests & Qualite
-- [ ] ArchUnit (verification architecture hexagonale)
-- [ ] Testcontainers pour tests integration
-- [ ] Tests de validation scientifique (solutions analytiques)
-- [ ] Coverage > 70% sur domain/application
 
 ### BLOC 9 — DevOps & Deploiement
 - [ ] CI/CD pipeline (GitHub Actions)
