@@ -1,0 +1,37 @@
+spring:
+  # Database - Test (Testcontainers)
+  datasource:
+    url: jdbc:tc:postgresql:15:///rheosim_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+
+  # JPA - Test
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  # Kafka - Test (embedded)
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
+
+  # Flyway - Test
+  flyway:
+    clean-disabled: false
+
+# Logging - Test
+logging:
+  level:
+    com.rheosim: INFO
+    org.springframework: WARN
+
+# Test-specific settings
+rheosim:
+  security:
+    jwt:
+      access-token-expiration: 60000
+      refresh-token-expiration: 120000
+    rate-limit:
+      requests-per-minute: 1000
+  compute:
+    max-concurrent-jobs: 2
+    job-timeout-seconds: 60

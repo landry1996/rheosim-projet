@@ -1,0 +1,62 @@
+# =============================================================================
+# RHEOSIM ENTERPRISE .gitignore
+# =============================================================================
+
+# --- Secrets (CRITICAL - never commit) ---
+**/application-secret.yml
+**/application-secret.yaml
+**/.env
+**/.env.local
+**/.env.production
+
+# --- Java / Maven ---
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+.mvn/wrapper/maven-wrapper.jar
+
+# --- IDE ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Node / Angular ---
+rheosim-frontend/node_modules/
+rheosim-frontend/dist/
+rheosim-frontend/.angular/
+
+# --- Docker ---
+docker/data/
+docker/logs/
+
+# --- Test & Coverage ---
+*.exec
+coverage/
+htmlcov/
+.coverage
+
+# --- Build artifacts ---
+build/
+out/
+bin/
+
+# --- Temporary ---
+tmp/
+temp/
+*.tmp
