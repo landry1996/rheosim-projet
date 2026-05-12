@@ -1,0 +1,119 @@
+syntax = "proto3";
+package rheosim.compute;
+
+option java_package = "com.rheosim.compute.grpc";
+option java_multiple_files = true;
+
+service ComputeEngine {
+  rpc Identify(IdentificationRequest) returns (IdentificationResponse);
+  rpc SimulateFEM(FEMRequest) returns (stream FEMProgress);
+  rpc HealthCheck(Empty) returns (HealthResponse);
+}
+
+message Empty {}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+  int32 active_jobs = 3;
+}
+
+// --- Parameter Identification ---
+
+message IdentificationRequest {
+  string model_type = 1;
+  repeated double time_points = 2;
+  repeated double measured_values = 3;
+  repeated double initial_guess = 4;
+  repeated double lower_bounds = 5;
+  repeated double upper_bounds = 6;
+  string fit_target = 7;
+  int32 max_iterations = 8;
+  double tolerance = 9;
+}
+
+message IdentificationResponse {
+  bool converged = 1;
+  repeated double parameters = 2;
+  repeated string parameter_names = 3;
+  double r_squared = 4;
+  int32 iterations = 5;
+  repeated double fitted_curve = 6;
+  map<string, double> metrics = 7;
+  string error_message = 8;
+}
+
+// --- FEM 3D Simulation ---
+
+message FEMRequest {
+  MeshData mesh = 1;
+  MaterialProperties material = 2;
+  repeated BoundaryCondition boundary_conditions = 3;
+  repeated LoadStep load_steps = 4;
+  SolverSettings settings = 5;
+}
+
+message MeshData {
+  repeated double node_coordinates = 1;  // [x1,y1,z1, x2,y2,z2, ...]
+  repeated int32 element_connectivity = 2;  // [n1,n2,n3,n4, ...] tetrahedra
+  int32 num_nodes = 3;
+  int32 num_elements = 4;
+  int32 nodes_per_element = 5;  // 4 for linear tetrahedra
+}
+
+message MaterialProperties {
+  string model_type = 1;
+  double young_modulus = 2;
+  double poisson_ratio = 3;
+  double density = 4;
+  // Prony series for viscoelasticity
+  double equilibrium_modulus = 5;
+  repeated PronyBranch prony_branches = 6;
+}
+
+message PronyBranch {
+  double modulus_pa = 1;
+  double relaxation_time_s = 2;
+}
+
+message BoundaryCondition {
+  enum Type {
+    DIRICHLET = 0;  // Displacement imposed
+    NEUMANN = 1;    // Force imposed
+  }
+  Type type = 1;
+  repeated int32 node_ids = 2;
+  int32 dof = 3;  // 0=x, 1=y, 2=z
+  double value = 4;
+}
+
+message LoadStep {
+  double time = 1;
+  repeated Load loads = 2;
+}
+
+message Load {
+  repeated int32 node_ids = 1;
+  int32 dof = 2;
+  double value = 3;
+}
+
+message SolverSettings {
+  double time_step = 1;
+  int32 num_steps = 2;
+  double convergence_tolerance = 3;
+  int32 max_iterations = 4;
+  string solver_type = 5;  // "direct" or "iterative"
+}
+
+message FEMProgress {
+  int32 current_step = 1;
+  int32 total_steps = 2;
+  double current_time = 3;
+  double max_displacement = 4;
+  double max_stress = 5;
+  repeated double displacement_field = 6;  // Full field at this step
+  repeated double stress_field = 7;
+  bool completed = 8;
+  string error_message = 9;
+}
