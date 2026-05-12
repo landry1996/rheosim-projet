@@ -43,6 +43,7 @@
         <commons-math.version>3.6.1</commons-math.version>
         <commons-csv.version>1.12.0</commons-csv.version>
         <poi.version>5.3.0</poi.version>
+        <pdfbox.version>3.0.3</pdfbox.version>
         <bucket4j.version>8.14.0</bucket4j.version>
     </properties>
 
@@ -132,6 +133,13 @@
                 <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
                 <version>${poi.version}</version>
+            </dependency>
+
+            <!-- Apache PDFBox (report generation) -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
             </dependency>
 
             <!-- Rate Limiting -->
