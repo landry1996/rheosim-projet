@@ -59,8 +59,8 @@ class HexagonalArchitectureTest {
     }
 
     @Test
-    @DisplayName("Infrastructure adapters should implement domain ports")
-    void infrastructure_adaptersShouldImplementPorts() {
+    @DisplayName("Infrastructure adapters named *Adapter should implement a domain port interface")
+    void infrastructure_adaptersShouldImplementDomainInterfaces() {
         classes()
                 .that().resideInAPackage("..adapter..")
                 .and().haveSimpleNameEndingWith("Adapter")
@@ -70,6 +70,8 @@ class HexagonalArchitectureTest {
                 .orShould().implement(com.rheosim.domain.identity.port.PasswordEncoder.class)
                 .orShould().implement(com.rheosim.domain.identity.port.TokenProvider.class)
                 .orShould().implement(com.rheosim.domain.shared.AuditPort.class)
+                .orShould().implement(com.rheosim.domain.project.port.ProjectRepository.class)
+                .orShould().implement(com.rheosim.domain.project.port.MaterialRepository.class)
                 .because("Adapters must implement domain ports (hexagonal architecture)")
                 .check(allClasses);
     }
