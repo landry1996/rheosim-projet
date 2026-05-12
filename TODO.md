@@ -99,13 +99,21 @@
   - [x] Environments (dev / prod)
   - [x] BUILD SUCCESS — ng build OK, tous les chunks generes
 
+- [x] BLOC 9 : DevOps & Deploiement
+  - [x] Dockerfile backend (multi-stage, Eclipse Temurin 21, non-root user)
+  - [x] Dockerfile frontend (multi-stage, Node 22 build + nginx)
+  - [x] nginx.conf (SPA routing + reverse proxy /api/)
+  - [x] docker-compose.prod.yml (full stack orchestration)
+  - [x] .dockerignore (backend + frontend)
+  - [x] CI/CD pipeline GitHub Actions (backend test, frontend build, Docker build)
+  - [x] OpenAPI config (SecurityScheme JWT, metadata)
+  - [x] Swagger UI disponible sur /api/swagger-ui.html
+  - [x] README professionnel (architecture, quickstart, API, stack, decisions)
+  - [x] BUILD SUCCESS — backend compile OK, frontend build OK
+
 ## Taches A Faire
 
-### BLOC 9 — DevOps & Deploiement
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Docker images optimisees
-- [ ] Documentation API (Swagger UI)
-- [ ] README professionnel
+(aucune — MVP V1 complet)
 
 ## Risques Identifies
 
