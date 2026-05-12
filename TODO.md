@@ -56,11 +56,23 @@
 - [x] BLOC 4 : Flyway V3 migration (datasets table)
 - [x] BLOC 4 : ArchUnit test mis a jour (ports Experiment)
 - [x] BLOC 4 : Dependencies — Apache Commons CSV 1.12.0, Apache POI 5.3.0
-- [x] BUILD SUCCESS — 25 tests passent, compilation validee
+- [x] BLOC 5 : Domain — SimulationJob, JobStatus, SimulationType, SimulationResult
+- [x] BLOC 5 : Ports — ConstitutiveLaw, SimulationJobRepository, ParameterIdentificationPort
+- [x] BLOC 5 : Events — SimulationJobSubmittedEvent, SimulationJobCompletedEvent
+- [x] BLOC 5 : Application — SimulationUseCase, DTOs (SubmitJobRequest, JobResponse, JobResultResponse)
+- [x] BLOC 5 : Engine — MaxwellLaw, KelvinVoigtLaw, PronySeriesLaw (implementations)
+- [x] BLOC 5 : Engine — LevenbergMarquardtIdentifier (Commons Math, numerical Jacobian)
+- [x] BLOC 5 : Engine — SimulationJobProcessor (scheduled polling, auto-execution)
+- [x] BLOC 5 : Infrastructure — SimulationJobRepositoryAdapter, JPA entity, JPA repository
+- [x] BLOC 5 : REST — SimulationController (submit, status, result, cancel)
+- [x] BLOC 5 : Flyway V4 migration (simulation_jobs table)
+- [x] BLOC 5 : ArchUnit test mis a jour (ports Simulation)
+- [x] BLOC 5 : Tests scientifiques — 11 tests de validation analytique (Maxwell, KV, Prony)
+- [x] BUILD SUCCESS — 43 tests passent, compilation validee
 
 ## Taches En Cours
 
-- [ ] BLOC 5 : Module Simulation (Compute Engine Java 1D)
+- [ ] BLOC 6 : Module Reporting
 
 ## Taches A Faire
 
