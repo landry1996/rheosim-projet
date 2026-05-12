@@ -1,0 +1,52 @@
+postgresql:
+  enabled: true
+  image:
+    tag: "15-alpine"
+  auth:
+    postgresPassword: "${DB_ROOT_PASSWORD}"
+    database: rheosim
+    username: rheosim
+    password: "${DB_PASSWORD}"
+  primary:
+    persistence:
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+kafka:
+  enabled: true
+  image:
+    tag: "3.7"
+  kraft:
+    enabled: true
+  controller:
+    replicaCount: 3
+  broker:
+    replicaCount: 3
+  persistence:
+    size: 10Gi
+
+redis:
+  enabled: true
+  image:
+    tag: "7-alpine"
+  architecture: standalone
+  auth:
+    enabled: true
+    password: "${REDIS_PASSWORD}"
+  master:
+    persistence:
+      size: 5Gi
+
+minio:
+  enabled: true
+  mode: standalone
+  persistence:
+    size: 50Gi
+  rootUser: rheosim
+  rootPassword: "${MINIO_PASSWORD}"
+  buckets:
+    - name: datasets
+    - name: reports

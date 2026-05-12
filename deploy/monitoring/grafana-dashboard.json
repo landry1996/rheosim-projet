@@ -1,0 +1,86 @@
+{
+  "dashboard": {
+    "title": "RheoSim Enterprise - Overview",
+    "panels": [
+      {
+        "title": "API Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (service)",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+      },
+      {
+        "title": "API Latency P95",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))",
+            "legendFormat": "{{service}} p95"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+      },
+      {
+        "title": "Active Simulation Jobs",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rheosim_active_jobs_count",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 8, "w": 6, "h": 6}
+      },
+      {
+        "title": "Simulation Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(rheosim_simulation_duration_seconds_bucket[5m])) by (le, model_type))",
+            "legendFormat": "{{model_type}} p95"
+          }
+        ],
+        "gridPos": {"x": 6, "y": 8, "w": 12, "h": 6}
+      },
+      {
+        "title": "Convergence Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(rheosim_simulation_convergence_total{converged=\"true\"}[1h])) / sum(rate(rheosim_simulation_convergence_total[1h]))",
+            "legendFormat": "Convergence %"
+          }
+        ],
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 6}
+      },
+      {
+        "title": "Dataset Upload Volume",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(rheosim_dataset_upload_bytes_total[5m]))",
+            "legendFormat": "bytes/sec"
+          }
+        ],
+        "gridPos": {"x": 0, "y": 14, "w": 12, "h": 6}
+      },
+      {
+        "title": "Compute Engine CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"compute-engine\"}[5m])",
+            "legendFormat": "CPU cores"
+          }
+        ],
+        "gridPos": {"x": 12, "y": 14, "w": 12, "h": 6}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "10s"
+  }
+}

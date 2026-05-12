@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'identity-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['identity-service:8080']
+
+  - job_name: 'project-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['project-service:8080']
+
+  - job_name: 'experiment-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['experiment-service:8080']
+
+  - job_name: 'simulation-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['simulation-service:8080']
+
+  - job_name: 'reporting-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['reporting-service:8080']
+
+  - job_name: 'compute-engine'
+    static_configs:
+      - targets: ['compute-engine:9090']
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9308']
+
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']

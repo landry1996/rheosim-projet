@@ -1,0 +1,37 @@
+replicaCount: 2
+
+image:
+  repository: rheosim/simulation-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+
+env:
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rheosim_simulation
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  RHEOSIM_COMPUTE_GRPC_HOST: compute-engine
+  RHEOSIM_COMPUTE_GRPC_PORT: "50051"
+  RHEOSIM_COMPUTE_GRPC_ENABLED: "true"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+healthcheck:
+  path: /actuator/health
+  initialDelaySeconds: 30
+  periodSeconds: 10
