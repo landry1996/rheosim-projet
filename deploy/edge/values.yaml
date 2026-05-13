@@ -78,7 +78,10 @@ postgresql:
   auth:
     database: rheosim
     username: rheosim
-    password: "changeme-in-production"
+    existingSecret: "rheosim-postgresql-secret"
+    secretKeys:
+      adminPasswordKey: "postgres-password"
+      userPasswordKey: "password"
   primary:
     persistence:
       size: 20Gi
@@ -89,7 +92,9 @@ redis:
   enabled: true
   architecture: standalone
   auth:
-    enabled: false
+    enabled: true
+    existingSecret: "rheosim-redis-secret"
+    existingSecretPasswordKey: "redis-password"
   master:
     persistence:
       size: 2Gi
@@ -106,13 +111,18 @@ kafka:
 ingress:
   enabled: true
   className: "traefik"
-  annotations: {}
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: "rheosim-security-headers@kubernetescrd"
   hosts:
     - host: rheosim.local
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: rheosim-tls-secret
+      hosts:
+        - rheosim.local
 
 # License
 license:
@@ -127,4 +137,6 @@ monitoring:
     enabled: true
   grafana:
     enabled: true
-    adminPassword: "admin"
+    existingSecret: "rheosim-grafana-secret"
+    secretKeys:
+      adminPasswordKey: "admin-password"

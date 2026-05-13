@@ -69,6 +69,11 @@ async def health_check():
     )
 
 
+MAX_DATA_POINTS = 10000
+MAX_BATCH_SIZE = 20
+ALLOWED_EXPERIMENT_TYPES = {"relaxation", "creep", "oscillation", "flow"}
+
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_model(request: PredictionRequest):
     if predictor is None:
@@ -79,6 +84,12 @@ async def predict_model(request: PredictionRequest):
 
     if len(request.time_points) < 10:
         raise HTTPException(status_code=400, detail="Need at least 10 data points")
+
+    if len(request.time_points) > MAX_DATA_POINTS:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_DATA_POINTS} data points allowed")
+
+    if request.experiment_type not in ALLOWED_EXPERIMENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"experiment_type must be one of: {ALLOWED_EXPERIMENT_TYPES}")
 
     result = predictor.predict(
         time_points=request.time_points,
@@ -93,10 +104,17 @@ async def predict_batch(requests: list[PredictionRequest]):
     if predictor is None:
         raise HTTPException(status_code=503, detail="Models not loaded")
 
+    if len(requests) > MAX_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_BATCH_SIZE} requests per batch")
+
     results = []
     for req in requests:
         if len(req.time_points) != len(req.values):
             raise HTTPException(status_code=400, detail="time_points and values must have same length")
+        if len(req.time_points) > MAX_DATA_POINTS:
+            raise HTTPException(status_code=400, detail=f"Maximum {MAX_DATA_POINTS} data points allowed")
+        if req.experiment_type not in ALLOWED_EXPERIMENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"experiment_type must be one of: {ALLOWED_EXPERIMENT_TYPES}")
         result = predictor.predict(
             time_points=req.time_points,
             values=req.values,

@@ -38,6 +38,8 @@ public class MarketplaceController {
     public ResponseEntity<List<PluginResponse>> listPlugins(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        if (page < 0) page = 0;
+        if (size < 1 || size > 100) size = 20;
         List<Plugin> plugins = marketplaceUseCase.listPlugins(page, size);
         return ResponseEntity.ok(plugins.stream().map(this::toResponse).toList());
     }

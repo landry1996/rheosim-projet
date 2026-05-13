@@ -19,6 +19,9 @@ import java.util.concurrent.CopyOnWriteArraySet;
 public class CollaborationWebSocketHandler extends BinaryWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CollaborationWebSocketHandler.class);
+    private static final int MAX_MESSAGE_SIZE = 64 * 1024; // 64KB max per CRDT update
+    private static final int MAX_SESSIONS_PER_DOCUMENT = 50;
+    private static final int MAX_TEXT_MESSAGE_SIZE = 4 * 1024; // 4KB for awareness
 
     private final Map<String, Set<WebSocketSession>> documentSessions = new ConcurrentHashMap<>();
     private final Map<String, byte[]> documentStates = new ConcurrentHashMap<>();
@@ -26,7 +29,18 @@ public class CollaborationWebSocketHandler extends BinaryWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String documentId = extractDocumentId(session);
-        documentSessions.computeIfAbsent(documentId, k -> new CopyOnWriteArraySet<>()).add(session);
+        Set<WebSocketSession> sessions = documentSessions.computeIfAbsent(documentId, k -> new CopyOnWriteArraySet<>());
+        if (sessions.size() >= MAX_SESSIONS_PER_DOCUMENT) {
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION);
+            } catch (IOException e) {
+                log.error("Failed to reject session", e);
+            }
+            return;
+        }
+        sessions.add(session);
+        session.setTextMessageSizeLimit(MAX_TEXT_MESSAGE_SIZE);
+        session.setBinaryMessageSizeLimit(MAX_MESSAGE_SIZE);
         log.info("Client connected to document {}: {}", documentId, session.getId());
 
         // Send current state to new client
@@ -45,7 +59,11 @@ public class CollaborationWebSocketHandler extends BinaryWebSocketHandler {
         String documentId = extractDocumentId(session);
         byte[] payload = message.getPayload().array();
 
-        // Store latest state
+        if (payload.length > MAX_MESSAGE_SIZE) {
+            log.warn("Oversized binary message from session {}, rejecting", session.getId());
+            return;
+        }
+
         documentStates.put(documentId, payload);
 
         // Broadcast to all other clients in the same document

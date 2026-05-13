@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { environment } from '../../../environments/environment';
+import { AuthService } from './auth.service';
 
 export interface AwarenessUser {
   id: string;
@@ -17,6 +18,7 @@ export interface CollaborationState {
 
 @Injectable({ providedIn: 'root' })
 export class CollaborationService {
+  private readonly authService = inject(AuthService);
   private ws: WebSocket | null = null;
   private documentId: string | null = null;
   private reconnectAttempts = 0;
@@ -32,7 +34,12 @@ export class CollaborationService {
 
   connect(documentId: string, user: AwarenessUser): void {
     this.documentId = documentId;
-    const wsUrl = `${environment.wsUrl}/ws/collaboration/${documentId}`;
+    const token = this.authService.getAccessToken();
+    if (!token) {
+      return;
+    }
+    const baseWsUrl = environment.wsUrl || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+    const wsUrl = `${baseWsUrl}/ws/collaboration/${encodeURIComponent(documentId)}?token=${encodeURIComponent(token)}`;
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'arraybuffer';
 

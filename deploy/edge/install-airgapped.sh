@@ -96,11 +96,11 @@ verify() {
     echo "============================================"
     echo "  Installation Complete!"
     echo ""
-    echo "  Access RheoSim at: http://rheosim.local"
+    echo "  Access RheoSim at: https://rheosim.local"
     echo "  (Add 'rheosim.local' to /etc/hosts)"
     echo ""
-    echo "  Default credentials:"
-    echo "    Admin: admin@rheosim.local / admin123"
+    echo "  IMPORTANT: Set the admin password on first login."
+    echo "  Run: kubectl exec -n $NAMESPACE deploy/${RELEASE_NAME}-backend -- ./reset-admin-password.sh"
     echo "============================================"
 }
 

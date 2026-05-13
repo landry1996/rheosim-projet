@@ -50,7 +50,10 @@ public class QuotaEnforcementFilter extends OncePerRequestFilter {
                 } catch (IllegalStateException e) {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\":\"" + e.getMessage() + "\"}");
+                    String safeMessage = e.getMessage() != null
+                            ? e.getMessage().replaceAll("[^a-zA-Z0-9 _.,:-]", "")
+                            : "Quota exceeded";
+                    response.getWriter().write("{\"error\":\"" + safeMessage + "\"}");
                     return;
                 } catch (IllegalArgumentException ignored) {
                     // Non-UUID principal, skip enforcement

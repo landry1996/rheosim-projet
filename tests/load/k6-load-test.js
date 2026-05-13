@@ -25,11 +25,16 @@ export const options = {
 };
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const LOAD_TEST_EMAIL = __ENV.LOAD_TEST_EMAIL;
+const LOAD_TEST_PASSWORD = __ENV.LOAD_TEST_PASSWORD;
 
 export function setup() {
+  if (!LOAD_TEST_EMAIL || !LOAD_TEST_PASSWORD) {
+    throw new Error('LOAD_TEST_EMAIL and LOAD_TEST_PASSWORD env vars must be set');
+  }
   const loginRes = http.post(`${BASE_URL}/api/v1/auth/login`, JSON.stringify({
-    email: 'loadtest@rheosim.com',
-    password: 'loadtest123',
+    email: LOAD_TEST_EMAIL,
+    password: LOAD_TEST_PASSWORD,
   }), { headers: { 'Content-Type': 'application/json' } });
 
   return { token: loginRes.json('accessToken') };
@@ -44,8 +49,8 @@ export default function (data) {
   group('Authentication', () => {
     const start = Date.now();
     const res = http.post(`${BASE_URL}/api/v1/auth/login`, JSON.stringify({
-      email: 'loadtest@rheosim.com',
-      password: 'loadtest123',
+      email: LOAD_TEST_EMAIL,
+      password: LOAD_TEST_PASSWORD,
     }), { headers: { 'Content-Type': 'application/json' } });
 
     authLatency.add(Date.now() - start);
