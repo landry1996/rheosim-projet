@@ -1,21 +1,18 @@
 package com.rheosim.infrastructure.search.adapter;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
-import co.elastic.clients.elasticsearch.core.*;
-import co.elastic.clients.elasticsearch.core.search.Hit;
-import co.elastic.clients.elasticsearch.core.search.HighlightField;
-import co.elastic.clients.elasticsearch.core.search.TotalHits;
-import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
 import com.rheosim.infrastructure.search.dto.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.query.Criteria;
+import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
+import org.springframework.data.elasticsearch.core.query.IndexQuery;
+import org.springframework.data.elasticsearch.core.query.IndexQueryBuilder;
+import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,54 +25,44 @@ public class ElasticsearchIndexer {
     private static final String INDEX_PROJECTS = "rheosim-projects";
     private static final String INDEX_MATERIALS = "rheosim-materials";
 
-    private final ElasticsearchClient esClient;
+    private final ElasticsearchTemplate elasticsearchTemplate;
     private final JdbcTemplate jdbcTemplate;
 
-    public ElasticsearchIndexer(ElasticsearchClient esClient, JdbcTemplate jdbcTemplate) {
-        this.esClient = esClient;
+    public ElasticsearchIndexer(ElasticsearchTemplate elasticsearchTemplate, JdbcTemplate jdbcTemplate) {
+        this.elasticsearchTemplate = elasticsearchTemplate;
         this.jdbcTemplate = jdbcTemplate;
-    }
-
-    @PostConstruct
-    public void ensureIndices() {
-        createIndexIfNotExists(INDEX_PLUGINS);
-        createIndexIfNotExists(INDEX_PROJECTS);
-        createIndexIfNotExists(INDEX_MATERIALS);
     }
 
     public SearchResult search(String query, String type, int page, int size) {
         try {
             List<String> indices = getTargetIndices(type);
+            IndexCoordinates indexCoordinates = IndexCoordinates.of(indices.toArray(new String[0]));
 
-            SearchResponse<Map> response = esClient.search(s -> s
-                    .index(indices)
-                    .from(page * size)
-                    .size(size)
-                    .query(buildQuery(query))
-                    .highlight(h -> h
-                            .fields("name", HighlightField.of(hf -> hf))
-                            .fields("description", HighlightField.of(hf -> hf))
-                            .preTags("<mark>")
-                            .postTags("</mark>"))
-                    .aggregations("by_type", a -> a
-                            .terms(t -> t.field("_index"))),
-                    Map.class);
+            Criteria criteria = new Criteria("name").matches(query)
+                    .or(new Criteria("description").matches(query))
+                    .or(new Criteria("tags").matches(query))
+                    .or(new Criteria("family").matches(query))
+                    .or(new Criteria("author").matches(query));
 
-            TotalHits total = response.hits().total();
-            long totalHits = total != null ? total.value() : 0;
+            CriteriaQuery searchQuery = new CriteriaQuery(criteria);
+            searchQuery.setPageable(org.springframework.data.domain.PageRequest.of(page, size));
 
-            List<SearchResult.SearchHit> hits = response.hits().hits().stream()
-                    .map(this::mapHit)
+            SearchHits<Map> searchHits = elasticsearchTemplate.search(searchQuery, Map.class, indexCoordinates);
+
+            List<SearchResult.SearchHit> hits = searchHits.getSearchHits().stream()
+                    .map(hit -> new SearchResult.SearchHit(
+                            hit.getId(),
+                            hit.getIndex(),
+                            (double) hit.getScore(),
+                            hit.getContent(),
+                            hit.getHighlightFields()))
                     .collect(Collectors.toList());
 
+            long totalHits = searchHits.getTotalHits();
             Map<String, Long> facets = new HashMap<>();
-            if (response.aggregations().containsKey("by_type")) {
-                response.aggregations().get("by_type").sterms().buckets().array()
-                        .forEach(b -> facets.put(b.key().stringValue(), b.docCount()));
-            }
 
             return new SearchResult(hits, totalHits, page, size, facets);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Search failed", e);
             return new SearchResult(List.of(), 0, page, size, Map.of());
         }
@@ -83,21 +70,23 @@ public class ElasticsearchIndexer {
 
     public List<String> suggest(String query, int limit) {
         try {
-            SearchResponse<Map> response = esClient.search(s -> s
-                    .index(List.of(INDEX_PLUGINS, INDEX_PROJECTS, INDEX_MATERIALS))
-                    .size(limit)
-                    .query(q -> q.matchPhrasePrefix(m -> m
-                            .field("name")
-                            .query(query)))
-                    .source(src -> src.filter(f -> f.includes(List.of("name")))),
-                    Map.class);
+            IndexCoordinates indexCoordinates = IndexCoordinates.of(INDEX_PLUGINS, INDEX_PROJECTS, INDEX_MATERIALS);
 
-            return response.hits().hits().stream()
-                    .map(hit -> (String) hit.source().get("name"))
+            Criteria criteria = new Criteria("name").startsWith(query);
+            CriteriaQuery searchQuery = new CriteriaQuery(criteria);
+            searchQuery.setPageable(org.springframework.data.domain.PageRequest.of(0, limit));
+
+            SearchHits<Map> searchHits = elasticsearchTemplate.search(searchQuery, Map.class, indexCoordinates);
+
+            return searchHits.getSearchHits().stream()
+                    .map(hit -> {
+                        Object name = hit.getContent().get("name");
+                        return name != null ? name.toString() : null;
+                    })
                     .filter(Objects::nonNull)
                     .distinct()
                     .collect(Collectors.toList());
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Suggest failed", e);
             return List.of();
         }
@@ -105,16 +94,20 @@ public class ElasticsearchIndexer {
 
     public void indexDocument(String index, String id, Map<String, Object> document) {
         try {
-            esClient.index(i -> i.index(index).id(id).document(document));
-        } catch (IOException e) {
+            IndexQuery indexQuery = new IndexQueryBuilder()
+                    .withId(id)
+                    .withObject(document)
+                    .build();
+            elasticsearchTemplate.index(indexQuery, IndexCoordinates.of(index));
+        } catch (Exception e) {
             log.error("Failed to index document {} in {}", id, index, e);
         }
     }
 
     public void deleteDocument(String index, String id) {
         try {
-            esClient.delete(d -> d.index(index).id(id));
-        } catch (IOException e) {
+            elasticsearchTemplate.delete(id, IndexCoordinates.of(index));
+        } catch (Exception e) {
             log.error("Failed to delete document {} from {}", id, index, e);
         }
     }
@@ -148,14 +141,6 @@ public class ElasticsearchIndexer {
         log.info("Reindexed {} materials", materials.size());
     }
 
-    private Query buildQuery(String queryText) {
-        return Query.of(q -> q.multiMatch(MultiMatchQuery.of(m -> m
-                .query(queryText)
-                .fields(List.of("name^3", "description^2", "tags", "family", "grade", "author"))
-                .fuzziness("AUTO")
-                .type(co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType.BestFields))));
-    }
-
     private List<String> getTargetIndices(String type) {
         if (type == null || type.isBlank()) {
             return List.of(INDEX_PLUGINS, INDEX_PROJECTS, INDEX_MATERIALS);
@@ -166,40 +151,5 @@ public class ElasticsearchIndexer {
             case "material", "materials" -> List.of(INDEX_MATERIALS);
             default -> List.of(INDEX_PLUGINS, INDEX_PROJECTS, INDEX_MATERIALS);
         };
-    }
-
-    private SearchResult.SearchHit mapHit(Hit<Map> hit) {
-        Map<String, List<String>> highlights = new HashMap<>();
-        if (hit.highlight() != null) {
-            highlights = hit.highlight();
-        }
-        return new SearchResult.SearchHit(
-                hit.id(),
-                hit.index(),
-                hit.score(),
-                hit.source(),
-                highlights
-        );
-    }
-
-    private void createIndexIfNotExists(String indexName) {
-        try {
-            boolean exists = esClient.indices().exists(e -> e.index(indexName)).value();
-            if (!exists) {
-                esClient.indices().create(c -> c
-                        .index(indexName)
-                        .settings(s -> s
-                                .numberOfShards("2")
-                                .numberOfReplicas("1")
-                                .analysis(a -> a
-                                        .analyzer("french_english", an -> an
-                                                .custom(cu -> cu
-                                                        .tokenizer("standard")
-                                                        .filter(List.of("lowercase", "asciifolding")))))));
-                log.info("Created index: {}", indexName);
-            }
-        } catch (IOException e) {
-            log.error("Failed to create index: {}", indexName, e);
-        }
     }
 }

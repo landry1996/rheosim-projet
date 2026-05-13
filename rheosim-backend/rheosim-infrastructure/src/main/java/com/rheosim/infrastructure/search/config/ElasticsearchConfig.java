@@ -1,20 +1,12 @@
 package com.rheosim.infrastructure.search.config;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.ElasticsearchTransport;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
-import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.elasticsearch.client.RestClient;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.elasticsearch.client.ClientConfiguration;
+import org.springframework.data.elasticsearch.client.elc.ElasticsearchConfiguration;
 
 @Configuration
-public class ElasticsearchConfig {
+public class ElasticsearchConfig extends ElasticsearchConfiguration {
 
     @Value("${elasticsearch.host:localhost}")
     private String host;
@@ -28,29 +20,13 @@ public class ElasticsearchConfig {
     @Value("${elasticsearch.password:}")
     private String password;
 
-    @Value("${elasticsearch.scheme:http}")
-    private String scheme;
-
-    @Bean
-    public ElasticsearchClient elasticsearchClient() {
-        BasicCredentialsProvider credsProv = new BasicCredentialsProvider();
-        credsProv.setCredentials(
-                AuthScope.ANY,
-                new UsernamePasswordCredentials(username, password)
-        );
-
-        RestClient restClient = RestClient.builder(new HttpHost(host, port, scheme))
-                .setHttpClientConfigCallback(httpClientBuilder ->
-                        httpClientBuilder.setDefaultCredentialsProvider(credsProv))
-                .setRequestConfigCallback(requestConfigBuilder ->
-                        requestConfigBuilder
-                                .setConnectTimeout(5000)
-                                .setSocketTimeout(60000))
+    @Override
+    public ClientConfiguration clientConfiguration() {
+        return ClientConfiguration.builder()
+                .connectedTo(host + ":" + port)
+                .withBasicAuth(username, password)
+                .withConnectTimeout(5000)
+                .withSocketTimeout(60000)
                 .build();
-
-        ElasticsearchTransport transport = new RestClientTransport(
-                restClient, new JacksonJsonpMapper());
-
-        return new ElasticsearchClient(transport);
     }
 }

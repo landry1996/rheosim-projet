@@ -18,6 +18,7 @@ interface SearchResponse {
   page: number;
   size: number;
   facets: Record<string, number>;
+  hasNext: boolean;
 }
 
 @Component({
@@ -66,9 +67,9 @@ interface SearchResponse {
             <h3 class="result-title" [innerHTML]="getTitle(hit)"></h3>
             <p class="result-description" [innerHTML]="getDescription(hit)"></p>
             <div class="result-meta">
-              <span *ngIf="hit.source?.family">Famille: {{ hit.source.family }}</span>
-              <span *ngIf="hit.source?.author">Par: {{ hit.source.author }}</span>
-              <span *ngIf="hit.source?.status">Statut: {{ hit.source.status }}</span>
+              <span *ngIf="hit.source['family']">Famille: {{ hit.source['family'] }}</span>
+              <span *ngIf="hit.source['author']">Par: {{ hit.source['author'] }}</span>
+              <span *ngIf="hit.source['status']">Statut: {{ hit.source['status'] }}</span>
               <span class="score">Score: {{ hit.score | number:'1.2-2' }}</span>
             </div>
           </div>
@@ -196,12 +197,12 @@ export class SearchResultsComponent implements OnInit {
   }
 
   getTitle(hit: SearchHit): string {
-    if (hit.highlights?.['name']?.length) return hit.highlights['name'][0];
-    return hit.source?.['name'] || 'Sans titre';
+    if (hit.highlights && hit.highlights['name']?.length) return hit.highlights['name'][0];
+    return hit.source['name'] || 'Sans titre';
   }
 
   getDescription(hit: SearchHit): string {
-    if (hit.highlights?.['description']?.length) return hit.highlights['description'][0];
-    return hit.source?.['description'] || '';
+    if (hit.highlights && hit.highlights['description']?.length) return hit.highlights['description'][0];
+    return hit.source['description'] || '';
   }
 }

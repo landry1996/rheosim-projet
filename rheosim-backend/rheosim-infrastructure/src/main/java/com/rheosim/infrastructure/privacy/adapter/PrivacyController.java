@@ -2,11 +2,11 @@ package com.rheosim.infrastructure.privacy.adapter;
 
 import com.rheosim.application.privacy.dto.DataExportResponse;
 import com.rheosim.application.privacy.usecase.PrivacyUseCase;
+import com.rheosim.domain.identity.model.User;
 import com.rheosim.domain.privacy.model.DeletionRequest;
 import com.rheosim.domain.privacy.model.UserConsent;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,30 +22,24 @@ public class PrivacyController {
         this.privacyUseCase = privacyUseCase;
     }
 
-    // === Data Export (Article 15 & 20) ===
-
     @GetMapping("/export")
-    public ResponseEntity<DataExportResponse> exportData(@AuthenticationPrincipal Jwt jwt) {
-        UUID userId = UUID.fromString(jwt.getSubject());
-        DataExportResponse response = privacyUseCase.requestDataExport(userId);
+    public ResponseEntity<DataExportResponse> exportData(@AuthenticationPrincipal User currentUser) {
+        DataExportResponse response = privacyUseCase.requestDataExport(currentUser.getId());
         return ResponseEntity.ok(response);
     }
 
-    // === Account Deletion (Article 17) ===
-
     @PostMapping("/delete-account")
     public ResponseEntity<DeletionRequest> requestDeletion(
-            @AuthenticationPrincipal Jwt jwt,
+            @AuthenticationPrincipal User currentUser,
             @RequestBody DeletionRequestDto request) {
-        UUID userId = UUID.fromString(jwt.getSubject());
-        DeletionRequest deletion = privacyUseCase.requestAccountDeletion(userId, request.reason());
+        DeletionRequest deletion = privacyUseCase.requestAccountDeletion(currentUser.getId(), request.reason());
         return ResponseEntity.accepted().body(deletion);
     }
 
     @PostMapping("/delete-account/{requestId}/confirm")
     public ResponseEntity<DeletionRequest> confirmDeletion(
             @PathVariable UUID requestId,
-            @AuthenticationPrincipal Jwt jwt) {
+            @AuthenticationPrincipal User currentUser) {
         DeletionRequest confirmed = privacyUseCase.confirmDeletion(requestId);
         return ResponseEntity.ok(confirmed);
     }
@@ -53,40 +47,32 @@ public class PrivacyController {
     @PostMapping("/delete-account/{requestId}/cancel")
     public ResponseEntity<DeletionRequest> cancelDeletion(
             @PathVariable UUID requestId,
-            @AuthenticationPrincipal Jwt jwt) {
+            @AuthenticationPrincipal User currentUser) {
         DeletionRequest cancelled = privacyUseCase.cancelDeletion(requestId);
         return ResponseEntity.ok(cancelled);
     }
 
-    // === Consent Management (Article 7) ===
-
     @GetMapping("/consents")
-    public ResponseEntity<List<UserConsent>> getConsents(@AuthenticationPrincipal Jwt jwt) {
-        UUID userId = UUID.fromString(jwt.getSubject());
-        List<UserConsent> consents = privacyUseCase.getConsents(userId);
+    public ResponseEntity<List<UserConsent>> getConsents(@AuthenticationPrincipal User currentUser) {
+        List<UserConsent> consents = privacyUseCase.getConsents(currentUser.getId());
         return ResponseEntity.ok(consents);
     }
 
     @PutMapping("/consents")
     public ResponseEntity<Void> updateConsent(
-            @AuthenticationPrincipal Jwt jwt,
+            @AuthenticationPrincipal User currentUser,
             @RequestBody ConsentUpdateDto request,
-            @RequestHeader("X-Forwarded-For") String ipAddress,
+            @RequestHeader(value = "X-Forwarded-For", required = false, defaultValue = "unknown") String ipAddress,
             @RequestHeader("User-Agent") String userAgent) {
-        UUID userId = UUID.fromString(jwt.getSubject());
-        privacyUseCase.updateConsent(userId, request.type(), request.granted(), ipAddress, userAgent);
+        privacyUseCase.updateConsent(currentUser.getId(), request.type(), request.granted(), ipAddress, userAgent);
         return ResponseEntity.noContent().build();
     }
 
-    // === DPO Contact ===
-
     @PostMapping("/contact")
     public ResponseEntity<Void> contactDpo(@RequestBody DpoContactDto request) {
-        // Forward to DPO email/ticketing system
         return ResponseEntity.accepted().build();
     }
 
-    // DTOs
     record DeletionRequestDto(String reason) {}
     record ConsentUpdateDto(UserConsent.ConsentType type, boolean granted) {}
     record DpoContactDto(String name, String email, String subject, String message) {}

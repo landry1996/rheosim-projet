@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 
 interface ConsentState {
@@ -12,7 +13,7 @@ interface ConsentState {
 @Component({
   selector: 'app-cookie-banner',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div *ngIf="showBanner" class="cookie-banner" role="dialog" aria-label="Cookie consent">
       <div class="cookie-banner__content">
