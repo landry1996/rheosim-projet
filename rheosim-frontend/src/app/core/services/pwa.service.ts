@@ -51,7 +51,7 @@ export class PwaService {
       userVisibleOnly: true,
       applicationServerKey: this.urlBase64ToUint8Array(
         'YOUR_VAPID_PUBLIC_KEY_HERE'
-      ),
+      ) as BufferSource,
     });
     return subscription;
   }

@@ -6,6 +6,8 @@ import com.rheosim.domain.billing.model.SubscriptionTier;
 import com.rheosim.domain.billing.model.TierLimits;
 import com.rheosim.domain.billing.port.PaymentGateway;
 import com.rheosim.domain.billing.port.SubscriptionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class BillingUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(BillingUseCase.class);
 
     private final SubscriptionRepository subscriptionRepository;
     private final PaymentGateway paymentGateway;
@@ -83,5 +87,54 @@ public class BillingUseCase {
         if (!TierLimits.hasFeature(sub.getTier(), feature)) {
             throw new IllegalStateException("Feature '" + feature + "' not available on " + sub.getTier() + " plan. Please upgrade.");
         }
+    }
+
+    public void processWebhookEvent(String payload) {
+        if (payload == null || payload.isBlank()) {
+            log.warn("Empty webhook payload received");
+            return;
+        }
+
+        if (payload.contains("\"type\":\"customer.subscription.created\"") ||
+                payload.contains("\"type\": \"customer.subscription.created\"")) {
+            log.info("Processing subscription created event");
+            extractAndHandleSubscription(payload, true);
+        } else if (payload.contains("\"type\":\"customer.subscription.deleted\"") ||
+                payload.contains("\"type\": \"customer.subscription.deleted\"")) {
+            log.info("Processing subscription deleted event");
+            extractAndHandleSubscription(payload, false);
+        } else {
+            log.debug("Ignoring unhandled webhook event type");
+        }
+    }
+
+    private void extractAndHandleSubscription(String payload, boolean created) {
+        String subscriptionId = extractJsonValue(payload, "\"id\"");
+        String customerId = extractJsonValue(payload, "\"customer\"");
+
+        if (subscriptionId == null || customerId == null) {
+            log.warn("Could not extract subscription/customer ID from webhook payload");
+            return;
+        }
+
+        if (created) {
+            String plan = extractJsonValue(payload, "\"plan\"");
+            String tier = (plan != null && plan.contains("pro")) ? "PRO" : "ENTERPRISE";
+            handleSubscriptionCreated(subscriptionId, customerId, tier);
+        } else {
+            handleSubscriptionCancelled(subscriptionId);
+        }
+    }
+
+    private String extractJsonValue(String json, String key) {
+        int keyIndex = json.indexOf(key);
+        if (keyIndex == -1) return null;
+        int colonIndex = json.indexOf(':', keyIndex + key.length());
+        if (colonIndex == -1) return null;
+        int startQuote = json.indexOf('"', colonIndex + 1);
+        if (startQuote == -1) return null;
+        int endQuote = json.indexOf('"', startQuote + 1);
+        if (endQuote == -1) return null;
+        return json.substring(startQuote + 1, endQuote);
     }
 }

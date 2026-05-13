@@ -2,6 +2,8 @@ package com.rheosim.infrastructure.ml.adapter;
 
 import com.rheosim.domain.ml.model.MLPredictionResult;
 import com.rheosim.domain.ml.port.MLPredictionPort;
+import com.rheosim.infrastructure.ml.grpc.MLServiceGrpc;
+import com.rheosim.infrastructure.ml.grpc.MlService;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
