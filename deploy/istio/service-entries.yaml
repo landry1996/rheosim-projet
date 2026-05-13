@@ -1,0 +1,73 @@
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: stripe-api
+  namespace: rheosim
+spec:
+  hosts:
+    - api.stripe.com
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: mlflow-tracking
+  namespace: rheosim
+spec:
+  hosts:
+    - mlflow.rheosim.internal
+  ports:
+    - number: 5000
+      name: http
+      protocol: HTTP
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: smtp-email
+  namespace: rheosim
+spec:
+  hosts:
+    - smtp.sendgrid.net
+  ports:
+    - number: 587
+      name: smtp
+      protocol: TCP
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: oci-registry
+  namespace: rheosim
+spec:
+  hosts:
+    - registry.rheosim.io
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: default
+  namespace: rheosim
+spec:
+  egress:
+    - hosts:
+        - "./*"
+        - "istio-system/*"
+        - "monitoring/*"
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY

@@ -1,0 +1,92 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-backend-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - rheosim-backend
+  http:
+    - route:
+        - destination:
+            host: rheosim-backend
+            port:
+              number: 8080
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: "5xx,reset,connect-failure,retriable-4xx"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-compute-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - rheosim-compute
+  http:
+    - route:
+        - destination:
+            host: rheosim-compute
+            port:
+              number: 50051
+      timeout: 300s
+      retries:
+        attempts: 2
+        perTryTimeout: 120s
+        retryOn: "unavailable,resource-exhausted"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-ml-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - rheosim-ml
+  http:
+    - match:
+        - uri:
+            prefix: /predict
+      route:
+        - destination:
+            host: rheosim-ml
+            port:
+              number: 8000
+      timeout: 60s
+      retries:
+        attempts: 2
+        perTryTimeout: 30s
+        retryOn: "5xx,reset"
+    - match:
+        - uri:
+            prefix: /train
+      route:
+        - destination:
+            host: rheosim-ml
+            port:
+              number: 8000
+      timeout: 600s
+      retries:
+        attempts: 1
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-canary-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - rheosim-backend
+  http:
+    - route:
+        - destination:
+            host: rheosim-backend
+            subset: stable
+          weight: 90
+        - destination:
+            host: rheosim-backend
+            subset: canary
+          weight: 10

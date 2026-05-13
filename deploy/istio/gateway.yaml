@@ -1,0 +1,84 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: rheosim-gateway
+  namespace: rheosim
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: rheosim-tls-cert
+      hosts:
+        - "app.rheosim.io"
+        - "api.rheosim.io"
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "app.rheosim.io"
+        - "api.rheosim.io"
+      tls:
+        httpsRedirect: true
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-ingress-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - "app.rheosim.io"
+    - "api.rheosim.io"
+  gateways:
+    - rheosim-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/
+          headers:
+            ":authority":
+              exact: api.rheosim.io
+      route:
+        - destination:
+            host: rheosim-backend
+            port:
+              number: 8080
+    - match:
+        - uri:
+            prefix: /
+          headers:
+            ":authority":
+              exact: app.rheosim.io
+      route:
+        - destination:
+            host: rheosim-frontend
+            port:
+              number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rheosim-rate-limit-vs
+  namespace: rheosim
+spec:
+  hosts:
+    - rheosim-backend
+  http:
+    - match:
+        - headers:
+            x-rate-limit-tier:
+              exact: "free"
+      fault:
+        delay:
+          percentage:
+            value: 0
+      route:
+        - destination:
+            host: rheosim-backend

@@ -1,0 +1,109 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-policy
+  namespace: rheosim
+spec:
+  selector:
+    matchLabels:
+      app: rheosim-backend
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/rheosim/sa/rheosim-frontend
+              - cluster.local/ns/rheosim/sa/rheosim-gateway
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+            paths: ["/api/*"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/monitoring/sa/prometheus
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/actuator/prometheus", "/actuator/health"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: compute-policy
+  namespace: rheosim
+spec:
+  selector:
+    matchLabels:
+      app: rheosim-compute
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/rheosim/sa/rheosim-backend
+      to:
+        - operation:
+            ports: ["50051"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ml-service-policy
+  namespace: rheosim
+spec:
+  selector:
+    matchLabels:
+      app: rheosim-ml
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/rheosim/sa/rheosim-backend
+      to:
+        - operation:
+            methods: ["POST", "GET"]
+            paths: ["/predict/*", "/train/*", "/health"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: postgresql-policy
+  namespace: rheosim
+spec:
+  selector:
+    matchLabels:
+      app: postgresql
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/rheosim/sa/rheosim-backend
+      to:
+        - operation:
+            ports: ["5432"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: kafka-policy
+  namespace: rheosim
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/rheosim/sa/rheosim-backend
+              - cluster.local/ns/rheosim/sa/rheosim-ml
+      to:
+        - operation:
+            ports: ["9092"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-default
+  namespace: rheosim
+spec:
+  {}
