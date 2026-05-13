@@ -1,0 +1,20 @@
+[package]
+name = "rheosim-plugin-sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["RheoSim Team"]
+description = "SDK for building RheoSim constitutive model plugins in Rust"
+license = "MIT"
+repository = "https://github.com/landry1996/rheosim-projet"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
