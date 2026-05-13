@@ -1,0 +1,38 @@
+# NVIDIA GPU Operator Helm Values
+# Deploys NVIDIA device plugin, driver containers, and monitoring for K8s GPU scheduling.
+
+operator:
+  defaultRuntime: containerd
+
+driver:
+  enabled: true
+  version: "535.129.03"
+
+toolkit:
+  enabled: true
+
+devicePlugin:
+  enabled: true
+  config:
+    name: gpu-time-slicing
+    default: "any"
+    map:
+      any:
+        sharing:
+          timeSlicing:
+            renameByDefault: false
+            failRequestsGreaterThanOne: false
+            resources:
+              - name: nvidia.com/gpu
+                replicas: 4
+
+dcgmExporter:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+migManager:
+  enabled: false
+
+nodeStatusExporter:
+  enabled: true

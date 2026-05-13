@@ -1,0 +1,50 @@
+# Multi-stage build for RheoSim Compute Engine with GPU support
+# Base: NVIDIA CUDA runtime for GPU acceleration
+
+# --- Build stage ---
+FROM nvidia/cuda:12.3.1-devel-ubuntu22.04 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    g++ \
+    git \
+    libopenmpi-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY . .
+
+RUN mkdir build && cd build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DUSE_GPU=ON \
+    -DUSE_CUDA=ON \
+    -DUSE_OPENCL=OFF \
+    -DUSE_OPENMP=ON \
+    -DBUILD_TESTS=OFF \
+    -DBUILD_BENCHMARKS=ON && \
+    cmake --build . -j$(nproc)
+
+# --- Runtime stage ---
+FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /build/build/rheosim_compute_standalone /app/
+COPY --from=builder /build/build/rheosim_compute_server /app/ 2>/dev/null || true
+COPY --from=builder /build/build/rheosim_benchmark_gpu /app/ 2>/dev/null || true
+
+# NVIDIA Container Runtime environment
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV RHEOSIM_GPU_MODE=auto
+
+EXPOSE 50051
+
+ENTRYPOINT ["/app/rheosim_compute_server"]
+CMD ["--gpu=auto", "--port=50051"]
