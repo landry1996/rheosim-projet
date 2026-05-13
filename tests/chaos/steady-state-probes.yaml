@@ -1,0 +1,114 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: steady-state-validation
+  namespace: rheosim
+  annotations:
+    description: "Validates system steady state before and after chaos experiments"
+spec:
+  engineState: active
+  appinfo:
+    appns: rheosim
+    applabel: app=rheosim-backend
+    appkind: deployment
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "1"
+            - name: PODS_AFFECTED_PERC
+              value: "0"
+        probe:
+          - name: backend-http-200
+            type: httpProbe
+            mode: SOT
+            httpProbe/inputs:
+              url: http://rheosim-backend:8080/actuator/health
+              method:
+                get:
+                  criteria: ==
+                  responseCode: "200"
+            runProperties:
+              probeTimeout: 5
+              interval: 2
+              retry: 3
+
+          - name: backend-latency-under-2s
+            type: promProbe
+            mode: SOT
+            promProbe/inputs:
+              endpoint: http://prometheus:9090
+              query: "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{application='rheosim-backend'}[5m]))"
+              comparator:
+                type: float
+                criteria: "<="
+                value: "2.0"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 2
+
+          - name: compute-grpc-healthy
+            type: cmdProbe
+            mode: SOT
+            cmdProbe/inputs:
+              command: "grpcurl -plaintext rheosim-compute:50051 grpc.health.v1.Health/Check"
+              source:
+                image: fullstorydev/grpcurl:latest
+              comparator:
+                type: string
+                criteria: contains
+                value: "SERVING"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 3
+
+          - name: ml-service-ready
+            type: httpProbe
+            mode: SOT
+            httpProbe/inputs:
+              url: http://rheosim-ml:8000/health
+              method:
+                get:
+                  criteria: ==
+                  responseCode: "200"
+            runProperties:
+              probeTimeout: 5
+              interval: 2
+              retry: 3
+
+          - name: postgresql-accepting
+            type: cmdProbe
+            mode: SOT
+            cmdProbe/inputs:
+              command: "pg_isready -h postgresql -p 5432"
+              source:
+                image: postgres:15-alpine
+              comparator:
+                type: string
+                criteria: contains
+                value: "accepting connections"
+            runProperties:
+              probeTimeout: 5
+              interval: 5
+              retry: 3
+
+          - name: kafka-brokers-available
+            type: cmdProbe
+            mode: SOT
+            cmdProbe/inputs:
+              command: "kafka-broker-api-versions --bootstrap-server kafka:9092"
+              source:
+                image: confluentinc/cp-kafka:7.5.0
+              comparator:
+                type: string
+                criteria: contains
+                value: "ApiVersion"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 2

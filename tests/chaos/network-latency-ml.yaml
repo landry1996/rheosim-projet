@@ -1,0 +1,47 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: network-latency-ml
+  namespace: rheosim
+spec:
+  engineState: active
+  appinfo:
+    appns: rheosim
+    applabel: app=rheosim-backend
+    appkind: deployment
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: NETWORK_INTERFACE
+              value: "eth0"
+            - name: NETWORK_LATENCY
+              value: "500"
+            - name: JITTER
+              value: "100"
+            - name: DESTINATION_HOSTS
+              value: "rheosim-ml.rheosim.svc.cluster.local"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+        probe:
+          - name: timeout-circuit-breaker
+            type: httpProbe
+            mode: Continuous
+            httpProbe/inputs:
+              url: http://rheosim-backend:8080/api/v1/simulation/predict
+              method:
+                post:
+                  contentType: application/json
+                  body: '{"material_id": "test", "params": []}'
+                  criteria: oneOf
+                  responseCode: "200,503,504"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 2

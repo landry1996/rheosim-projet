@@ -1,0 +1,57 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: disk-fill-postgres
+  namespace: rheosim
+spec:
+  engineState: active
+  appinfo:
+    appns: rheosim
+    applabel: app=postgresql
+    appkind: statefulset
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: disk-fill
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: FILL_PERCENTAGE
+              value: "95"
+            - name: EPHEMERAL_STORAGE_MEBIBYTES
+              value: ""
+            - name: DATA_BLOCK_SIZE
+              value: "256"
+            - name: CONTAINER_PATH
+              value: "/var/lib/postgresql/data"
+        probe:
+          - name: postgres-not-corrupted
+            type: cmdProbe
+            mode: Edge
+            cmdProbe/inputs:
+              command: "pg_isready -h postgresql -p 5432"
+              source:
+                image: postgres:15-alpine
+              comparator:
+                type: string
+                criteria: contains
+                value: "accepting connections"
+            runProperties:
+              probeTimeout: 10
+              interval: 10
+              retry: 3
+          - name: alertmanager-fired
+            type: promProbe
+            mode: OnChaos
+            promProbe/inputs:
+              endpoint: http://prometheus:9090
+              query: "ALERTS{alertname='PostgreSQLDiskUsageHigh', severity='critical'}"
+              comparator:
+                type: int
+                criteria: ">="
+                value: "1"
+            runProperties:
+              probeTimeout: 30
+              interval: 15
+              retry: 2

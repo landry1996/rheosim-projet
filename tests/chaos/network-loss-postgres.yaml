@@ -1,0 +1,46 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: network-loss-postgres
+  namespace: rheosim
+spec:
+  engineState: active
+  appinfo:
+    appns: rheosim
+    applabel: app=rheosim-backend
+    appkind: deployment
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-network-loss
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: NETWORK_INTERFACE
+              value: "eth0"
+            - name: NETWORK_PACKET_LOSS_PERCENTAGE
+              value: "100"
+            - name: DESTINATION_IPS
+              value: ""
+            - name: DESTINATION_HOSTS
+              value: "postgresql.rheosim.svc.cluster.local"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+        probe:
+          - name: connection-pool-recovery
+            type: httpProbe
+            mode: Edge
+            httpProbe/inputs:
+              url: http://rheosim-backend:8080/actuator/health
+              method:
+                get:
+                  criteria: ==
+                  responseCode: "200"
+            runProperties:
+              probeTimeout: 15
+              interval: 5
+              retry: 5
+              probePollingInterval: 3

@@ -1,0 +1,117 @@
+name: Chaos Engineering Tests (Nightly)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC daily
+  workflow_dispatch:
+
+env:
+  CLUSTER_NAME: rheosim-staging
+  NAMESPACE: rheosim
+
+jobs:
+  chaos-tests:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure cluster access
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" > kubeconfig.yaml
+          export KUBECONFIG=kubeconfig.yaml
+
+      - name: Install Litmus
+        run: |
+          helm repo add litmuschaos https://litmuschaos.github.io/litmus-helm/
+          helm repo update
+          helm upgrade --install litmus litmuschaos/litmus \
+            --namespace litmus --create-namespace \
+            --set portal.frontend.service.type=ClusterIP
+
+      - name: Wait for Litmus ready
+        run: |
+          kubectl wait --for=condition=ready pod -l app=litmus \
+            -n litmus --timeout=120s
+
+      - name: Validate steady state (pre-chaos)
+        run: |
+          kubectl apply -f tests/chaos/steady-state-probes.yaml
+          sleep 30
+          kubectl get chaosresult -n $NAMESPACE -o jsonpath='{.items[0].status.experimentStatus.verdict}'
+
+      - name: Run Pod Kill - Backend
+        run: |
+          kubectl apply -f tests/chaos/pod-kill-backend.yaml
+          sleep 90
+          RESULT=$(kubectl get chaosresult pod-kill-backend-pod-delete \
+            -n $NAMESPACE -o jsonpath='{.status.experimentStatus.verdict}')
+          echo "Pod Kill Backend: $RESULT"
+          [ "$RESULT" == "Pass" ] || exit 1
+
+      - name: Run Pod Kill - ML Service
+        run: |
+          kubectl apply -f tests/chaos/pod-kill-ml.yaml
+          sleep 120
+          RESULT=$(kubectl get chaosresult pod-kill-ml-pod-delete \
+            -n $NAMESPACE -o jsonpath='{.status.experimentStatus.verdict}')
+          echo "Pod Kill ML: $RESULT"
+          [ "$RESULT" == "Pass" ] || exit 1
+
+      - name: Run Network Loss - PostgreSQL
+        run: |
+          kubectl apply -f tests/chaos/network-loss-postgres.yaml
+          sleep 60
+          RESULT=$(kubectl get chaosresult network-loss-postgres-pod-network-loss \
+            -n $NAMESPACE -o jsonpath='{.status.experimentStatus.verdict}')
+          echo "Network Loss PostgreSQL: $RESULT"
+          [ "$RESULT" == "Pass" ] || exit 1
+
+      - name: Run Network Latency - ML
+        run: |
+          kubectl apply -f tests/chaos/network-latency-ml.yaml
+          sleep 90
+          RESULT=$(kubectl get chaosresult network-latency-ml-pod-network-latency \
+            -n $NAMESPACE -o jsonpath='{.status.experimentStatus.verdict}')
+          echo "Network Latency ML: $RESULT"
+          [ "$RESULT" == "Pass" ] || exit 1
+
+      - name: Run Disk Fill - PostgreSQL
+        run: |
+          kubectl apply -f tests/chaos/disk-fill-postgres.yaml
+          sleep 90
+          RESULT=$(kubectl get chaosresult disk-fill-postgres-disk-fill \
+            -n $NAMESPACE -o jsonpath='{.status.experimentStatus.verdict}')
+          echo "Disk Fill PostgreSQL: $RESULT"
+          [ "$RESULT" == "Pass" ] || exit 1
+
+      - name: Validate steady state (post-chaos)
+        run: |
+          kubectl delete chaosengine --all -n $NAMESPACE
+          sleep 60
+          kubectl apply -f tests/chaos/steady-state-probes.yaml
+          sleep 30
+          VERDICT=$(kubectl get chaosresult -n $NAMESPACE -o jsonpath='{.items[0].status.experimentStatus.verdict}')
+          echo "Post-chaos steady state: $VERDICT"
+          [ "$VERDICT" == "Pass" ] || exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          kubectl delete chaosengine --all -n $NAMESPACE || true
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "## Chaos Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Scenario | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          for result in $(kubectl get chaosresult -n $NAMESPACE -o jsonpath='{range .items[*]}{.metadata.name}={.status.experimentStatus.verdict}{"\n"}{end}'); do
+            NAME=$(echo $result | cut -d= -f1)
+            VERDICT=$(echo $result | cut -d= -f2)
+            echo "| $NAME | $VERDICT |" >> $GITHUB_STEP_SUMMARY
+          done

@@ -1,0 +1,54 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: pod-kill-ml
+  namespace: rheosim
+spec:
+  engineState: active
+  appinfo:
+    appns: rheosim
+    applabel: app=rheosim-ml
+    appkind: deployment
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "90"
+            - name: CHAOS_INTERVAL
+              value: "30"
+            - name: FORCE
+              value: "true"
+            - name: PODS_AFFECTED_PERC
+              value: "100"
+        probe:
+          - name: ml-fallback-check
+            type: httpProbe
+            mode: Continuous
+            httpProbe/inputs:
+              url: http://rheosim-backend:8080/api/v1/simulation/predict
+              method:
+                post:
+                  contentType: application/json
+                  body: '{"material_id": "test", "params": []}'
+                  criteria: ==
+                  responseCode: "503"
+            runProperties:
+              probeTimeout: 10
+              interval: 10
+              retry: 2
+          - name: backend-still-healthy
+            type: httpProbe
+            mode: Continuous
+            httpProbe/inputs:
+              url: http://rheosim-backend:8080/actuator/health
+              method:
+                get:
+                  criteria: ==
+                  responseCode: "200"
+            runProperties:
+              probeTimeout: 5
+              interval: 5
+              retry: 3
