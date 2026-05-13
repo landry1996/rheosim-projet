@@ -1,0 +1,11 @@
+apiVersion: v2
+name: rheosim-edge
+description: RheoSim Enterprise - Edge/On-Premise Deployment
+type: application
+version: 3.0.0
+appVersion: "3.0.0"
+keywords:
+  - rheology
+  - simulation
+  - on-premise
+  - edge

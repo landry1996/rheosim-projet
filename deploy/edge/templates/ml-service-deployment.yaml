@@ -1,0 +1,83 @@
+{{- if .Values.mlService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-ml-service
+  labels:
+    app: rheosim-ml
+spec:
+  replicas: {{ .Values.mlService.replicaCount }}
+  selector:
+    matchLabels:
+      app: rheosim-ml
+  template:
+    metadata:
+      labels:
+        app: rheosim-ml
+    spec:
+      containers:
+        - name: ml-service
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.mlService.image.repository }}:{{ .Values.mlService.image.tag }}"
+          imagePullPolicy: {{ .Values.mlService.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 50052
+              name: grpc
+          env:
+            - name: RHEOSIM_ML_HTTP_PORT
+              value: "8000"
+            - name: RHEOSIM_ML_GRPC_PORT
+              value: "50052"
+            - name: RHEOSIM_ML_MODEL_DIR
+              value: "/app/models"
+          resources:
+            {{- toYaml .Values.mlService.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-ml-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-service
+spec:
+  selector:
+    app: rheosim-ml
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+    - port: 50052
+      targetPort: grpc
+      name: grpc
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-ml-models
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: {{ .Values.global.storageClass }}
+{{- end }}

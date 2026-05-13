@@ -1,0 +1,130 @@
+# RheoSim Edge Deployment Configuration
+
+global:
+  imageRegistry: ""
+  storageClass: "local-path"
+
+# Backend Service
+backend:
+  replicaCount: 2
+  image:
+    repository: rheosim/backend
+    tag: "3.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  env:
+    SPRING_PROFILES_ACTIVE: "edge"
+    RHEOSIM_ML_GRPC_HOST: "ml-service"
+    RHEOSIM_ML_GRPC_PORT: "50052"
+
+# ML Service
+mlService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: rheosim/ml-service
+    tag: "3.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+    limits:
+      cpu: 4000m
+      memory: 4Gi
+
+# Compute Engine
+computeEngine:
+  replicaCount: 2
+  image:
+    repository: rheosim/compute
+    tag: "3.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 2Gi
+    limits:
+      cpu: 8000m
+      memory: 8Gi
+  gpu:
+    enabled: false
+    count: 1
+
+# Frontend
+frontend:
+  replicaCount: 2
+  image:
+    repository: rheosim/frontend
+    tag: "3.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# PostgreSQL (embedded for edge)
+postgresql:
+  enabled: true
+  auth:
+    database: rheosim
+    username: rheosim
+    password: "changeme-in-production"
+  primary:
+    persistence:
+      size: 20Gi
+      storageClass: "local-path"
+
+# Redis
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 2Gi
+
+# Kafka (embedded)
+kafka:
+  enabled: true
+  kraft:
+    enabled: true
+  persistence:
+    size: 10Gi
+
+# Ingress
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations: {}
+  hosts:
+    - host: rheosim.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# License
+license:
+  enabled: true
+  key: ""
+  validationEndpoint: ""
+
+# Monitoring (optional)
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+    adminPassword: "admin"
