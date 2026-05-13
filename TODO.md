@@ -75,6 +75,62 @@
 - [x] BLOC 8 : JaCoCo coverage reporting (plugin configure dans parent POM)
 - [x] BUILD SUCCESS — 88 tests passent, compilation validee
 
+## Taches Terminees V3
+
+- [x] PHASE 1 : ML Auto-Calibration
+  - [x] Service Python ML complet (FastAPI + gRPC)
+  - [x] Training pipeline (data generator, feature extractor, XGBoost, PyTorch)
+  - [x] ONNX export et inference
+  - [x] Integration gRPC backend Java (MLServiceGrpcClient)
+  - [x] Frontend : ML suggestion component avec score de confiance
+  - [x] Docker Compose : ml-service container
+
+- [x] PHASE 2 : Couplage Thermo-Mecanique
+  - [x] ThermalSolver C++ (FEM, Euler implicite, masse lumpee)
+  - [x] TTSModel (WLF + Arrhenius)
+  - [x] ThermoMechanicalSolver (staggered coupling)
+  - [x] Conditions aux limites thermiques (Dirichlet, Neumann, Robin)
+
+- [x] PHASE 3 : Marketplace de Plugins
+  - [x] Domain : Plugin, PluginVersion, PluginReview
+  - [x] Application : MarketplaceUseCase, DTOs
+  - [x] Infrastructure : JPA entities, repos, MarketplaceController
+  - [x] Migration Flyway V2 (marketplace tables + GIN indexes)
+  - [x] Frontend : catalogue + detail
+
+- [x] PHASE 4 : Collaboration CRDT + Billing SaaS
+  - [x] WebSocket handler binaire/texte (CRDT + awareness)
+  - [x] Frontend CollaborationService + PresenceIndicator
+  - [x] Domain billing : Subscription, Tier, TierLimits
+  - [x] QuotaEnforcementFilter
+  - [x] BillingController (checkout, portal, webhook Stripe)
+  - [x] Migration Flyway V3
+
+- [x] PHASE 5 : Edge Computing + PWA
+  - [x] Helm chart K3s (backend, ML, network policies)
+  - [x] Script install-airgapped.sh
+  - [x] PWA : Service Worker + Web App Manifest
+  - [x] PWA Service Angular (install prompt, push)
+
+- [x] PHASE 6 : Securite & Performance
+  - [x] SecurityHeadersFilter (CSP complet, HSTS, Cache-Control)
+  - [x] k6 load test (500 VUs, 5 scenarios)
+  - [x] Network policies Kubernetes zero-trust
+  - [x] Audit securite complet + corrections
+
+- [x] AUDIT SECURITE & HARDENING
+  - [x] Migration localStorage → sessionStorage (anti-XSS)
+  - [x] WebSocket auth interceptor + origines restreintes
+  - [x] Rate limiting renforce auth (10/min)
+  - [x] XSRF protection Angular
+  - [x] Stripe webhook signature verification (HMAC-SHA256)
+  - [x] InputSanitizationFilter (XSS/injection query params)
+  - [x] WebSocket limites (64KB, 50 sessions/doc)
+  - [x] ML input validation (10000 pts, 20 batch, types whitelistes)
+  - [x] Credentials externalises (.env, K8s secrets)
+  - [x] Docker ports 127.0.0.1 + Redis requirepass
+  - [x] TLS ingress + CORS headers restreints
+
 ## Taches En Cours
 
 (aucune)
@@ -113,7 +169,7 @@
 
 ## Taches A Faire
 
-(aucune — MVP V1 complet)
+(aucune — V3 complet, audit securite effectue)
 
 ## Risques Identifies
 
@@ -134,8 +190,12 @@
 - Runtime = Java 25, compilation target = Java 21 (--release 21)
 - Lombok retire : on utilise records Java pour DTOs, builders manuels pour entites
 - Spring Boot 4.x n'est pas encore GA (mai 2026) — on utilise 3.4.5
-- Le compute engine C++ est prevu pour V2 (3D FEM)
+- Compute engine C++ operationnel (3D FEM + thermo-mecanique + TTS)
+- Service ML Python operationnel (FastAPI + gRPC + ONNX)
 - Chaque bounded context a ses propres packages dans domain/application/infrastructure
 - Communication inter-contextes via Domain Events (Kafka)
-- Pas de microservices en V1 (ADR-4 du CDC)
+- Communication synchrone backend→ML via gRPC (port 50052)
 - Kafka en mode KRaft (pas de Zookeeper)
+- Securite auditee : sessionStorage, rate limiting auth, CSP complet, WebSocket auth
+- Deploiement edge K3s air-gapped supporte (Helm chart + script)
+- PWA installable avec cache offline et push notifications

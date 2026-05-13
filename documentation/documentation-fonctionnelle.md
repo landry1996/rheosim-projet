@@ -8,19 +8,22 @@ RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique 
 
 ### 1.2 Perimetre
 
-| Capacite | V1 | V2 |
-|----------|----|----|
-| Simulation 1D/2D | Maxwell, Kelvin-Voigt, Prony | Conserve |
-| Simulation 3D FEM | - | Tetraedres P1, integration viscoelastique |
-| Import de donnees | CSV, Excel | + MinIO S3 storage |
-| Identification parametrique | Levenberg-Marquardt Java | + C++ haute performance (gRPC) |
-| Generation de rapports | PDF, CSV, JSON | + export VTK (3D) |
-| Multi-utilisateurs | JWT, roles USER/ADMIN | + RBAC par projet (OWNER/EDITOR/VIEWER) |
-| Collaboration | - | Organisations, invitations, audit trail |
-| Multi-tenant | - | Isolation par organisation |
-| Notifications temps reel | - | WebSocket STOMP/SockJS |
-| Visualisation 3D | - | Three.js (deformation, contraintes) |
-| Observabilite | Actuator | Prometheus + Grafana + Jaeger + Loki |
+| Capacite | V1 | V2 | V3 |
+|----------|----|----|-----|
+| Simulation 1D/2D | Maxwell, Kelvin-Voigt, Prony | Conserve | Conserve |
+| Simulation 3D FEM | - | Tetraedres P1, viscoelastique | + Thermo-mecanique, WLF/Arrhenius |
+| Import de donnees | CSV, Excel | + MinIO S3 storage | Conserve |
+| Identification parametrique | Levenberg-Marquardt Java | + C++ haute performance (gRPC) | + ML auto-calibration (ONNX) |
+| Generation de rapports | PDF, CSV, JSON | + export VTK (3D) | Conserve |
+| Multi-utilisateurs | JWT, roles USER/ADMIN | + RBAC par projet | + SaaS billing (FREE/PRO/ENTERPRISE) |
+| Collaboration | - | Organisations, invitations | + CRDT temps-reel, presence |
+| Multi-tenant | - | Isolation par organisation | + Quotas par tier |
+| Notifications temps reel | - | WebSocket STOMP/SockJS | + Push notifications (PWA) |
+| Visualisation 3D | - | Three.js (deformation) | Conserve |
+| Marketplace | - | - | Catalogue de plugins, avis, versions |
+| Edge/Offline | - | - | PWA + K3s air-gapped deployment |
+| Securite | JWT + RBAC | + Network Policies | + Rate limiting auth, CSP, sanitisation |
+| Observabilite | Actuator | Prometheus + Grafana + Jaeger | + k6 load testing (500 VUs) |
 
 ### 1.3 Utilisateurs Cibles
 
@@ -43,7 +46,7 @@ RheoSim Enterprise est une plateforme scientifique de simulation viscoelastique 
 | Connexion | Email + mot de passe. Retourne un access token JWT (15 min) + refresh token (7 jours). |
 | Deconnexion | Revocation du refresh token. |
 | Rafraichissement | Renouvellement automatique du token avant expiration. |
-| Rate Limiting | 60 requetes/minute par IP (protection contre brute force). |
+| Rate Limiting | 60 req/min API, **10 req/min auth** (protection renforcee V3). |
 | Audit | Chaque action d'authentification est tracee (table audit_logs). |
 
 **Regles metier** :
@@ -292,20 +295,89 @@ GENERATING → READY / FAILED → EXPIRED
 
 ## 4. Contraintes et Limites
 
-| Contrainte | V1 | V2 |
-|------------|----|----|
-| Taille fichier max | 50 Mo | 50 Mo (MinIO) |
-| Jobs concurrents | 4 par instance | 4 par pod, scalable HPA |
-| Modeles | 1D uniquement | 1D + FEM 3D |
-| Collaboration | Pas de partage | Organisations + roles |
-| Notifications | Polling | WebSocket temps reel |
-| Deployment | Docker Compose | Kubernetes + Helm |
-| Monitoring | Actuator | Prometheus + Grafana + Jaeger |
-| Load | ~10 users | 100+ users (k6 valide) |
+| Contrainte | V1 | V2 | V3 |
+|------------|----|----|-----|
+| Taille fichier max | 50 Mo | 50 Mo (MinIO) | 50 Mo |
+| Jobs concurrents | 4 par instance | 4 par pod, scalable HPA | Idem |
+| Modeles | 1D uniquement | 1D + FEM 3D | + Thermo-mecanique |
+| ML points max | - | - | 10000 points/requete, 20 batch |
+| Collaboration | Pas de partage | Organisations + roles | + CRDT temps reel (50 users/doc) |
+| Notifications | Polling | WebSocket temps reel | + Push PWA |
+| Deployment | Docker Compose | Kubernetes + Helm | + K3s edge, air-gapped |
+| Monitoring | Actuator | Prometheus + Grafana | + k6 500 VUs |
+| Load | ~10 users | 100+ users | 500+ users |
+| Rate limit auth | 60/min | 60/min | 10/min (anti brute-force) |
 
 ---
 
-## 5. Glossaire
+## 5. Modules V3
+
+### 5.1 Module ML Auto-Calibration
+
+**Acteurs** : Ingenieur materiaux, Chercheur
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Prediction de modele | A partir d'une courbe experimentale, le ML suggere le type de loi constitutive (Maxwell, KV, Prony 2/3/4) avec un score de confiance |
+| Estimation de parametres | Le reseau de neurones fournit des parametres initiaux estimes pour l'optimiseur LM |
+| Alternatives | Presentation de 3 modeles alternatifs classes par confiance |
+| Application directe | L'utilisateur peut appliquer la suggestion en 1 clic pour lancer l'identification |
+
+**Regles metier** :
+- Minimum 10 points de donnees requis
+- Maximum 10000 points par requete
+- Types d'experience autorises : relaxation, creep, oscillation, flow
+- Si le service ML est indisponible, l'utilisateur peut toujours faire une identification manuelle
+
+### 5.2 Module Marketplace
+
+**Acteurs** : Tous les utilisateurs authentifies
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Catalogue | Navigation paginee dans les plugins disponibles |
+| Recherche | Recherche full-text + filtrage par tags |
+| Publication | Un auteur peut publier un plugin (nom, description, licence, tags) |
+| Versions | Gestion des versions avec statut (PENDING, APPROVED, REJECTED) |
+| Avis | Notation 1-5 etoiles + commentaire textuel |
+| Telechargement | Compteur de telechargements, metric de popularite |
+
+### 5.3 Module Billing SaaS
+
+**Acteurs** : Utilisateurs souhaitant des fonctionnalites avancees
+
+| Tier | Fonctionnalites | Quotas |
+|------|----------------|--------|
+| FREE | Simulation 1D, 3 projets, 5 materiaux | 100 simulations/mois |
+| PRO | + FEM 3D, + ML calibration, projets illimites | 1000 simulations/mois |
+| ENTERPRISE | + GPU compute, + marketplace upload, + support prioritaire | Illimite |
+
+**Integration Stripe** : Checkout, portail client, webhooks verifies (HMAC-SHA256)
+
+### 5.4 Module Collaboration CRDT
+
+**Acteurs** : Equipes travaillant sur un meme projet
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Edition temps reel | Synchronisation CRDT binaire via WebSocket |
+| Presence | Indicateur de qui est connecte au document (nom, couleur, curseur) |
+| Reconnexion | Backoff exponentiel automatique (max 5 tentatives) |
+| Limites | 50 utilisateurs simultanes par document |
+
+### 5.5 Module Edge / PWA
+
+**Acteurs** : Equipes en environnement deconnecte
+
+| Fonctionnalite | Description |
+|----------------|-------------|
+| Installation offline | Script air-gapped pour K3s sans acces internet |
+| PWA | Application installable, fonctionne hors-ligne (cache assets) |
+| Push notifications | Alertes sur la fin de simulation, avis marketplace |
+
+---
+
+## 6. Glossaire
 
 | Terme | Definition |
 |-------|-----------|
@@ -323,6 +395,13 @@ GENERATING → READY / FAILED → EXPIRED
 | **Tetraedre P1** | Element fini volumique a 4 noeuds, interpolation lineaire |
 | **Von Mises** | Critere de contrainte equivalente pour les materiaux ductiles |
 | **gRPC** | Framework RPC haute performance (Google Protocol Buffers) |
+| **CRDT** | Conflict-free Replicated Data Type (synchronisation sans conflit) |
+| **ONNX** | Open Neural Network Exchange (format portable de modeles ML) |
+| **XGBoost** | Algorithme de gradient boosting pour classification/regression |
+| **WLF** | Williams-Landel-Ferry (modele de superposition temps-temperature) |
+| **CSP** | Content Security Policy (en-tete HTTP de protection navigateur) |
+| **PWA** | Progressive Web App (application web installable hors-ligne) |
+| **K3s** | Distribution Kubernetes legere pour edge/IoT |
 | **STOMP** | Protocole de messagerie texte sur WebSocket |
 | **HPA** | Horizontal Pod Autoscaler (Kubernetes) |
 | **OpenTelemetry** | Standard de traces distribuees et metriques |

@@ -233,11 +233,13 @@ CREATE TABLE audit_events (id UUID PRIMARY KEY, organization_id UUID, user_id UU
 | Version | Fichier | Contenu |
 |---------|---------|---------|
 | V1 | `V1__create_identity_tables.sql` | users, roles, user_roles, refresh_tokens, audit_logs |
-| V2 | `V2__create_project_tables.sql` | projects, materials, project_materials |
-| V3 | `V3__create_dataset_table.sql` | datasets |
-| V4 | `V4__create_simulation_jobs_table.sql` | simulation_jobs |
-| V5 | `V5__create_reports_table.sql` | reports |
-| V6 | `V6__create_collaboration_tables.sql` | organizations, members, invitations, collaborators, audit_events |
+| V2 | `V2__create_marketplace_tables.sql` | plugins, plugin_versions, plugin_reviews (GIN indexes, full-text) |
+| V3 | `V3__create_billing_tables.sql` | subscriptions, usage_records |
+| V4 | `V4__create_project_tables.sql` | projects, materials, project_materials |
+| V5 | `V5__create_dataset_table.sql` | datasets |
+| V6 | `V6__create_simulation_jobs_table.sql` | simulation_jobs |
+| V7 | `V7__create_reports_table.sql` | reports |
+| V8 | `V8__create_collaboration_tables.sql` | organizations, members, invitations, collaborators, audit_events |
 
 ---
 
@@ -266,6 +268,11 @@ Client                    Backend
 - Cle privee : montee via Kubernetes Secret (`/etc/secrets/jwt/private.pem`)
 - Cle publique : distribuee a tous les services pour validation locale
 
+**Stockage cote client (V3)** :
+- Access token : `sessionStorage` (protection XSS vs localStorage)
+- Refresh token : `sessionStorage` (automatiquement nettoye a la fermeture de l'onglet)
+- Donnees utilisateur minimisees (id, prenom, roles uniquement)
+
 ### 4.2 RBAC
 
 | Role Systeme | Permissions |
@@ -279,17 +286,44 @@ Client                    Backend
 | EDITOR | Modifier contenu (materiaux, datasets, simulations) |
 | VIEWER | Lecture seule |
 
-### 4.3 Protection
+### 4.3 Protection Multi-Couches (V3)
 
-- **Rate Limiting** : Bucket4j, 60 req/min par IP
-- **CORS** : Origines configurables (defaut localhost:4200)
-- **Validation** : Bean Validation sur tous les DTOs entrants
+#### Couche Reseau
+- **Network Policies K8s** : Zero-trust, default-deny, communication explicite pod-a-pod
+- **TLS** : cert-manager + Let's Encrypt sur Ingress, TLS obligatoire en production
+- **Ports Docker** : Lies a `127.0.0.1` (pas d'exposition externe en dev)
+- **Redis** : Authentification `requirepass` obligatoire
+
+#### Couche Application (Backend)
+- **Rate Limiting** : Bucket4j, 60 req/min API, **10 req/min auth** (anti brute-force)
+- **SecurityHeadersFilter** : HSTS, CSP complet (frame-ancestors none, base-uri self, object-src none, upgrade-insecure-requests), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy, Cache-Control no-store
+- **InputSanitizationFilter** : Protection XSS/injection sur query params (regex script tags, event handlers, encodage HTML entities)
+- **CORS** : Origines configurables, headers restreints (Authorization, Content-Type, X-XSRF-TOKEN, X-Requested-With), credentials actives
+- **Validation** : Bean Validation sur tous les DTOs entrants + pagination bornee (max 100)
 - **SQL Injection** : Parameterized queries via JPA/Hibernate
-- **XSS** : Angular sanitize par defaut
-- **CSRF** : Non necessaire (API stateless JWT)
-- **Network Policies** : Isolation inter-pods K8s (V2)
-- **Sealed Secrets** : Chiffrement des secrets K8s (V2)
-- **TLS** : cert-manager + Let's Encrypt sur Ingress (V2)
+- **Webhook Stripe** : Verification HMAC-SHA256 de la signature + tolerance temporelle 5 min
+
+#### Couche Application (Frontend)
+- **XSRF/CSRF** : `withXsrfConfiguration` (cookie XSRF-TOKEN, header X-XSRF-TOKEN)
+- **XSS** : Angular sanitize par defaut + sessionStorage au lieu de localStorage
+- **WebSocket** : Token JWT dans le handshake (`?token=`), origines restreintes
+
+#### Couche WebSocket (Collaboration CRDT)
+- **Authentification** : `WebSocketAuthInterceptor` verifie le token avant handshake
+- **Origines** : Restreintes aux domaines configures (plus de wildcard `*`)
+- **Limites** : Max 64KB par message binaire, 4KB par message texte, 50 sessions/document
+- **Protection DoS** : Rejet des connexions au-dela de la limite par document
+
+#### Couche ML Service
+- **Validation stricte** : Max 10000 points par requete, 20 requetes par batch
+- **Types autorises** : whitelist (relaxation, creep, oscillation, flow)
+- **Container** : Mode read-only, tmpfs pour fichiers temporaires
+
+#### Gestion des Secrets (V3)
+- **Docker** : Variables d'environnement obligatoires via `.env` (pas de valeurs par defaut en production)
+- **Kubernetes** : `existingSecret` pour PostgreSQL, Redis, Grafana (pas de credentials dans values.yaml)
+- **Fichier `.env.example`** : Documentation des variables requises sans valeurs reelles
+- **`.gitignore`** : Exclusion stricte de `**/.env`, `**/.env.local`, `**/application-secret.yml`
 
 ---
 
@@ -466,7 +500,39 @@ POST   /api/v1/organizations/{id}/projects/{pid}/collaborators → Collaborator
 GET    /api/v1/organizations/{id}/projects/{pid}/collaborators → Collaborator[]
 ```
 
-#### WebSocket (V2)
+#### ML Auto-Calibration (V3)
+```
+POST   /api/v1/ml/predict     → AutoCalibrationResponse (model, confidence, params, alternatives)
+GET    /api/v1/ml/status      → {available: boolean}
+```
+
+#### Marketplace (V3)
+```
+GET    /api/v1/marketplace/plugins              → PluginResponse[] (pagine, max 100)
+GET    /api/v1/marketplace/plugins/search       → PluginResponse[] (full-text + tags)
+GET    /api/v1/marketplace/plugins/{slug}       → PluginResponse
+POST   /api/v1/marketplace/plugins              → PluginResponse (auth: auteur)
+POST   /api/v1/marketplace/plugins/{id}/versions → PluginVersion
+GET    /api/v1/marketplace/plugins/{id}/versions → PluginVersion[]
+POST   /api/v1/marketplace/plugins/{id}/reviews  → PluginReview
+GET    /api/v1/marketplace/plugins/{id}/reviews  → PluginReview[]
+POST   /api/v1/marketplace/plugins/{id}/download → 200
+```
+
+#### Billing (V3)
+```
+GET    /api/v1/billing/subscription → SubscriptionResponse (tier, status, periodEnd)
+POST   /api/v1/billing/checkout     → {url: stripeCheckoutUrl}
+POST   /api/v1/billing/portal       → {url: stripePortalUrl}
+POST   /api/v1/billing/webhook      → 200 (Stripe signature verified)
+```
+
+#### WebSocket Collaboration (V3)
+```
+WS     /ws/collaboration/{documentId}?token=JWT  → Binary (CRDT) + Text (awareness JSON)
+```
+
+#### WebSocket Notifications (V2)
 ```
 CONNECT  /ws (SockJS)
 SUBSCRIBE /user/{userId}/queue/notifications  → Notifications personnelles
@@ -667,13 +733,22 @@ Push/PR → [backend-test] → [frontend-test] → [docker-build]
 - **test_lm_convergence** (4) : convergence monotone, bornes, R², multi-modele
 - **test_fem_beam** (5+) : volume conservation, symetrie, cantilever, zero load
 
-### 9.4 Load Testing (k6)
+### 9.4 Load Testing (k6) — V3
 
 | Scenario | VUs | Duree | Seuils |
 |----------|-----|-------|--------|
-| Smoke | 5 | 1 min | P95 < 2s |
-| Load | 0→100 | 9 min | Error rate < 5% |
-| Stress | 0→300 | 14 min | P99 < 5s |
+| Ramp up | 0→50 | 1 min | — |
+| Load | 50→200 | 3 min | P95 < 2s |
+| Peak | 200→500 | 5 min | P99 < 5s, errors < 5% |
+| Scale down | 500→200 | 2 min | — |
+| Ramp down | 200→0 | 1 min | — |
+
+**Metriques custom** :
+- `auth_latency` : P95 < 500ms
+- `simulation_latency` : P95 < 3s
+- `ml_latency` : P95 < 1s
+
+**Usage** : `k6 run -e LOAD_TEST_EMAIL=... -e LOAD_TEST_PASSWORD=... tests/load/k6-load-test.js`
 
 ---
 
@@ -693,13 +768,88 @@ Push/PR → [backend-test] → [frontend-test] → [docker-build]
 | K8s | HPA CPU-based (60-70% target) |
 | Compute pods | Node selector sur machines high-CPU |
 
-### 10.2 Capacite cible V2
+### 10.2 Capacite cible V3
 
 | Metrique | Cible |
 |----------|-------|
-| Utilisateurs simultanes | 100+ |
+| Utilisateurs simultanes | 500+ |
 | Simulation 1D | < 5 sec |
 | Simulation FEM 100k elements | < 10 min |
+| ML auto-calibration | < 1 sec |
 | Upload 50 Mo | < 30 sec |
 | API P95 latence | < 2 sec |
-| Disponibilite | 99.5% |
+| WebSocket collaboration | 50 users/document |
+| Disponibilite | 99.9% |
+
+---
+
+## 11. Modules V3
+
+### 11.1 ML Auto-Calibration
+
+**Architecture** :
+```
+rheosim-ml/                    # Python 3.11
+├── src/
+│   ├── config.py             # Pydantic settings
+│   ├── training/
+│   │   ├── data_generator.py    # 100k courbes synthetiques (Maxwell, KV, Prony 2/3/4)
+│   │   ├── feature_extractor.py # 12 features (pentes, inflexions, plateaux, spectre)
+│   │   ├── model_classifier.py  # XGBoost multi-class (5 types)
+│   │   ├── param_estimator.py   # PyTorch NN avec masked loss
+│   │   └── train_pipeline.py    # Pipeline complet → export ONNX
+│   ├── inference/
+│   │   ├── onnx_predictor.py    # ONNX Runtime inference
+│   │   ├── api_server.py        # FastAPI (/health, /predict, /predict/batch)
+│   │   └── grpc_server.py       # gRPC MLServiceServicer
+│   └── proto/ml_service.proto   # PredictModel, EstimateParameters, HealthCheck
+├── tests/
+├── Dockerfile
+└── pyproject.toml
+```
+
+**Communication** : Backend Java → gRPC → ML Service Python (port 50052)
+**Fallback** : Si le service ML est indisponible, retour HTTP 503
+
+### 11.2 Couplage Thermo-Mecanique (C++)
+
+**Nouveaux composants** :
+- `ThermalSolver` : Resolution FEM de l'equation de chaleur (Euler implicite, masse lumpee)
+- `TTSModel` : WLF (C1, C2, T_ref) et Arrhenius (Ea, R, T_ref)
+- `ThermoMechanicalSolver` : Couplage stagger (thermique → mecanique → dissipation)
+
+**Conditions aux limites thermiques** : Dirichlet, Neumann, Robin (convection)
+
+### 11.3 Marketplace de Plugins
+
+**Backend** :
+- Entites : Plugin, PluginVersion, PluginReview
+- Use case : CRUD, recherche full-text (GIN index), telechargement, avis
+- Migration Flyway V2 : tables `plugins`, `plugin_versions`, `plugin_reviews`
+
+**Frontend** : Catalogue avec recherche, detail plugin avec avis et versions
+
+### 11.4 Collaboration CRDT + Billing SaaS
+
+**Collaboration** :
+- WebSocket binaire (CRDT state sync) + texte (awareness JSON)
+- `CollaborationWebSocketHandler` : broadcast, stockage etat, gestion sessions
+- Frontend : `CollaborationService` avec reconnexion exponentielle
+
+**Billing** :
+- Tiers : FREE, PRO, ENTERPRISE
+- `QuotaEnforcementFilter` : Verification des quotas avant execution
+- Integration Stripe : checkout, portal, webhook avec verification signature HMAC
+- Migration Flyway V3 : tables `subscriptions`, `usage_records`
+
+### 11.5 Edge Computing + PWA
+
+**Helm Chart** (`deploy/edge/`) :
+- K3s air-gapped deployment
+- Templates : backend, ML, network policies, PVC
+- Script `install-airgapped.sh` : installation sans acces internet
+
+**PWA** :
+- Service Worker : strategies de cache (cache-first assets, network-first API)
+- Web App Manifest : icones, shortcuts, standalone display
+- Push notifications via VAPID
