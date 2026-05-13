@@ -1,0 +1,58 @@
+# Kubernetes Auth Method Configuration for Vault
+# Maps K8s ServiceAccounts to Vault policies
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-k8s-auth-config
+  namespace: rheosim
+data:
+  configure-auth.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    VAULT_ADDR="https://vault.vault.svc.cluster.local:8200"
+    export VAULT_ADDR
+
+    # Enable Kubernetes auth method
+    vault auth enable kubernetes 2>/dev/null || true
+
+    # Configure Kubernetes auth
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+      token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+    # Backend role
+    vault write auth/kubernetes/role/rheosim-backend \
+      bound_service_account_names=rheosim-backend \
+      bound_service_account_namespaces=rheosim \
+      policies=backend-policy \
+      ttl=1h \
+      max_ttl=4h
+
+    # ML Service role
+    vault write auth/kubernetes/role/rheosim-ml \
+      bound_service_account_names=rheosim-ml \
+      bound_service_account_namespaces=rheosim \
+      policies=ml-policy \
+      ttl=1h \
+      max_ttl=4h
+
+    # Compute role
+    vault write auth/kubernetes/role/rheosim-compute \
+      bound_service_account_names=rheosim-compute \
+      bound_service_account_namespaces=rheosim \
+      policies=backend-policy \
+      ttl=1h \
+      max_ttl=4h
+
+    # Admin role (for operators)
+    vault write auth/kubernetes/role/vault-admin \
+      bound_service_account_names=vault-admin \
+      bound_service_account_namespaces=vault \
+      policies=admin-policy \
+      ttl=4h \
+      max_ttl=8h
+
+    echo "Kubernetes auth roles configured successfully"
