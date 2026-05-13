@@ -1,0 +1,39 @@
+{
+  "name": "rheosim-elasticsearch-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+    "tasks.max": "3",
+    "topics": "rheosim.projects,rheosim.materials,rheosim.plugins",
+    "connection.url": "https://rheosim-search-es-http:9200",
+    "connection.username": "elastic",
+    "connection.password": "${file:/opt/kafka-connect/secrets/es-password.txt:password}",
+
+    "type.name": "_doc",
+    "key.ignore": "false",
+    "schema.ignore": "true",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+
+    "transforms": "extractId,routeToIndex",
+    "transforms.extractId.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+    "transforms.extractId.field": "id",
+    "transforms.routeToIndex.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.routeToIndex.regex": "rheosim\\.(.*)",
+    "transforms.routeToIndex.replacement": "rheosim-$1",
+
+    "behavior.on.null.values": "delete",
+    "behavior.on.malformed.documents": "warn",
+    "write.method": "upsert",
+    "batch.size": 200,
+    "max.buffered.records": 5000,
+    "flush.timeout.ms": 10000,
+    "linger.ms": 1000,
+    "max.retries": 5,
+    "retry.backoff.ms": 1000,
+
+    "elastic.security.protocol": "SSL",
+    "elastic.https.ssl.truststore.location": "/opt/kafka-connect/secrets/truststore.jks",
+    "elastic.https.ssl.truststore.password": "${file:/opt/kafka-connect/secrets/es-password.txt:truststore_password}"
+  }
+}

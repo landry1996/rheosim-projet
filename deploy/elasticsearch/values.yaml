@@ -1,0 +1,89 @@
+# Elasticsearch Helm Chart Values
+# 3-node cluster for production search
+
+clusterName: rheosim-search
+
+replicas: 3
+minimumMasterNodes: 2
+
+roles:
+  - master
+  - data
+  - ingest
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "2Gi"
+  limits:
+    cpu: "2"
+    memory: "4Gi"
+
+volumeClaimTemplate:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: gp3
+
+esJavaOpts: "-Xmx2g -Xms2g"
+
+protocol: https
+httpPort: 9200
+transportPort: 9300
+
+esConfig:
+  elasticsearch.yml: |
+    cluster.name: rheosim-search
+    network.host: 0.0.0.0
+    xpack.security.enabled: true
+    xpack.security.transport.ssl.enabled: true
+    xpack.security.transport.ssl.verification_mode: certificate
+    xpack.security.http.ssl.enabled: true
+    xpack.monitoring.collection.enabled: true
+
+    # Index settings
+    action.auto_create_index: "rheosim-*"
+    indices.query.bool.max_clause_count: 4096
+
+extraEnvs:
+  - name: ELASTIC_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-credentials
+        key: password
+
+service:
+  type: ClusterIP
+  httpPortName: https
+  transportPortName: transport
+
+ingress:
+  enabled: false
+
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - bash
+        - -c
+        - |
+          #!/bin/bash
+          # Drain node before shutdown
+          curl -s -X PUT "localhost:9200/_cluster/settings" \
+            -H 'Content-Type: application/json' \
+            -d '{"persistent":{"cluster.routing.allocation.exclude._name":"'$HOSTNAME'"}}'
+          sleep 20
+
+antiAffinity: "soft"
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 1000
