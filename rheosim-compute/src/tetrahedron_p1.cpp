@@ -10,11 +10,9 @@ double TetrahedronP1::volume(const Eigen::Matrix<double, 4, 3>& coords) {
     return std::abs(a.dot(b.cross(c))) / 6.0;
 }
 
-Eigen::Matrix<double, 6, 12> TetrahedronP1::b_matrix(
+Eigen::Matrix<double, 4, 3> TetrahedronP1::shape_function_gradients(
     const Eigen::Matrix<double, 4, 3>& coords) {
 
-    // Compute shape function gradients for P1 tetrahedron
-    // dN/dx, dN/dy, dN/dz for each of 4 nodes
     Eigen::Matrix3d J;
     J.row(0) = coords.row(1) - coords.row(0);
     J.row(1) = coords.row(2) - coords.row(0);
@@ -22,13 +20,18 @@ Eigen::Matrix<double, 6, 12> TetrahedronP1::b_matrix(
 
     Eigen::Matrix3d Jinv = J.inverse();
 
-    // Gradients of shape functions in physical coordinates
-    // N1 = 1 - xi - eta - zeta, N2 = xi, N3 = eta, N4 = zeta
     Eigen::Matrix<double, 4, 3> dN;
     dN.row(0) = -Jinv.col(0) - Jinv.col(1) - Jinv.col(2);
     dN.row(1) = Jinv.col(0);
     dN.row(2) = Jinv.col(1);
     dN.row(3) = Jinv.col(2);
+    return dN;
+}
+
+Eigen::Matrix<double, 6, 12> TetrahedronP1::b_matrix(
+    const Eigen::Matrix<double, 4, 3>& coords) {
+
+    Eigen::Matrix<double, 4, 3> dN = shape_function_gradients(coords);
 
     // Assemble B matrix (6x12): strain = B * u
     // Voigt: [eps_xx, eps_yy, eps_zz, gamma_xy, gamma_yz, gamma_xz]

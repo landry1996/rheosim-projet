@@ -57,6 +57,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ML Service (Python FastAPI + gRPC)
+  ml-service:
+    build:
+      context: ../rheosim-ml
+      dockerfile: Dockerfile
+    container_name: rheosim-ml
+    environment:
+      RHEOSIM_ML_GRPC_PORT: "50052"
+      RHEOSIM_ML_HTTP_PORT: "8000"
+      RHEOSIM_ML_MODEL_DIR: "/app/models"
+    ports:
+      - "8000:8000"
+      - "50052:50052"
+    volumes:
+      - ml_models:/app/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # Kafka UI (development only)
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -74,3 +95,4 @@ volumes:
   postgres_data:
   kafka_data:
   redis_data:
+  ml_models:

@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package rheosim.ml;
+
+option java_package = "com.rheosim.ml.proto";
+option java_multiple_files = true;
+
+service MLService {
+    rpc PredictModel(PredictionRequest) returns (PredictionResponse);
+    rpc EstimateParameters(EstimationRequest) returns (EstimationResponse);
+    rpc RetrainModel(RetrainRequest) returns (RetrainResponse);
+    rpc HealthCheck(Empty) returns (HealthResponse);
+}
+
+message Empty {}
+
+message PredictionRequest {
+    repeated double time_points = 1;
+    repeated double values = 2;
+    string experiment_type = 3;
+}
+
+message ModelAlternative {
+    string model_type = 1;
+    double confidence = 2;
+    repeated double initial_parameters = 3;
+}
+
+message PredictionResponse {
+    string recommended_model = 1;
+    double confidence = 2;
+    repeated double initial_parameters = 3;
+    repeated ModelAlternative alternatives = 4;
+}
+
+message EstimationRequest {
+    repeated double time_points = 1;
+    repeated double values = 2;
+    string model_type = 3;
+    string experiment_type = 4;
+}
+
+message EstimationResponse {
+    repeated double parameters = 1;
+    repeated double parameter_bounds_lower = 2;
+    repeated double parameter_bounds_upper = 3;
+    double confidence = 4;
+}
+
+message RetrainRequest {
+    int32 min_samples = 1;
+    bool force = 2;
+}
+
+message RetrainResponse {
+    bool success = 1;
+    string message = 2;
+    double new_accuracy = 3;
+    int32 samples_used = 4;
+}
+
+message HealthResponse {
+    string status = 1;
+    bool models_loaded = 2;
+    string version = 3;
+}

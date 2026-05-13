@@ -56,6 +56,8 @@ set(LIB_SOURCES
     src/fem_solver.cpp
     src/mesh.cpp
     src/tetrahedron_p1.cpp
+    src/thermal_solver.cpp
+    src/thermomechanical_solver.cpp
 )
 
 # Library

@@ -15,6 +15,15 @@ public:
     // Compute element volume
     static double volume(const Eigen::Matrix<double, 4, 3>& node_coords);
 
+    // Alias used by thermal solver
+    static double compute_volume(const Eigen::Matrix<double, 4, 3>& node_coords) {
+        return volume(node_coords);
+    }
+
+    // Compute shape function gradients (4x3 matrix, each row is grad(N_i))
+    static Eigen::Matrix<double, 4, 3> shape_function_gradients(
+        const Eigen::Matrix<double, 4, 3>& node_coords);
+
     // Compute B matrix (strain-displacement, 6x12)
     static Eigen::Matrix<double, 6, 12> b_matrix(
         const Eigen::Matrix<double, 4, 3>& node_coords);
