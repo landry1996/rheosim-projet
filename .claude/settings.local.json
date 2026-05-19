@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('docker-compose.local.yml'\\)\\)\")",
+      "Bash(Get-Content -Path \"C:\\\\Users\\\\ltchi\\\\OneDrive\\\\Bureau\\\\Projet CV\\\\news projects\\\\rheosim-projet\\\\docker\\\\docker-compose.local.yml\")",
+      "Bash(Measure-Object -Line)",
+      "Bash(docker-compose -f docker/docker-compose.local.yml config)",
+      "Bash(POSTGRES_PASSWORD=test REDIS_PASSWORD=test docker-compose -f docker/docker-compose.local.yml config)",
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('docker/docker-compose.local.yml'\\)\\)\")",
+      "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('docker/docker-compose.local.yml'\\)\\)\")",
+      "Bash(docker compose *)",
+      "Bash(cat)",
+      "Bash(rm -f .env.test)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ltchi\\\\OneDrive\\\\Bureau\\\\Projet CV\\\\news projects\\\\rheosim-projet\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('C:\\\\Users\\\\ltchi\\\\OneDrive\\\\Bureau\\\\Projet CV\\\\news projects\\\\rheosim-projet\\\\docker\\\\docker-compose.local.yml'\\)\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Skill(superpowers:finishing-a-development-branch)"
+    ]
+  }
+}
